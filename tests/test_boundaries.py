@@ -26,6 +26,7 @@ from council_tax_freeze.boundaries.crosswalk import (
     resolve,
 )
 from council_tax_freeze.boundaries.lad_2025 import LAD_2025_CODES
+from council_tax_freeze.boundaries.precepting_groups import PRECEPTING_GROUP
 from council_tax_freeze.boundaries.reorg_events import (
     EVENTS,
     Apportionment,
@@ -298,6 +299,25 @@ def test_full_2000_2025_coverage():
     assert counts == sorted(counts, reverse=True), f"coverage should be non-increasing over time: {coverage_by_year}"
     assert counts[0] > counts[-1], "expected strictly more LA identities in 2000-01 than in 2025-26"
     assert counts[-1] == 296, f"2025-26 should show exactly the 296 current LAs, got {counts[-1]}"
+
+
+def test_precepting_group_covers_every_2025_la_exactly_once():
+    assert set(PRECEPTING_GROUP.keys()) == LAD_2025_CODES
+
+    from collections import Counter
+
+    sizes = Counter(PRECEPTING_GROUP.values())
+    standalone = [g for g in sizes if g.startswith("__standalone__")]
+    grouped = [g for g in sizes if not g.startswith("__standalone__")]
+
+    # every standalone group is a singleton by construction
+    assert all(sizes[g] == 1 for g in standalone)
+    assert len(standalone) == 63, f"expected 63 standalone unitary LAs, got {len(standalone)}"
+
+    # every real (non-singleton) precepting group has at least 2 members,
+    # or it isn't doing anything a singleton wouldn't
+    assert all(sizes[g] >= 2 for g in grouped)
+    assert sizes["Greater London"] == 33, "32 boroughs + City of London"
 
 
 # ---------------------------------------------------------------------------

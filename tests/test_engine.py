@@ -14,7 +14,7 @@ than hiding them.
 import pytest
 
 from council_tax_freeze.config import DATA_DIR
-from council_tax_freeze.engine.build import HEADLINE_YEARS, build_engine, compute_shared_tier_exposure
+from council_tax_freeze.engine.build import HEADLINE_YEARS, build_engine, compute_shared_tier_exposure, compute_single_pot_bias_risk
 from council_tax_freeze.hpi.build import build_hpi
 from council_tax_freeze.parsers.band_d.parse import build_band_d
 from council_tax_freeze.parsers.ctsop.parse import build_ctsop
@@ -249,3 +249,95 @@ def test_exposure_is_bimodal_by_authority_type():
     assert low_cluster > 100
     assert high_cluster > 150
     assert middle < 20, f"expected a sparse middle between the two clusters, got {middle} LAs"
+
+
+# ---------------------------------------------------------------------------
+# Single-pot bias RISK - exposure alone can't show whether a bill is
+# actually distorted, only whether it COULD be. This needs the LA's own
+# precept to diverge, in cash terms, from peers sharing its other tiers.
+# First built as a ratio and dropped after it ranked ordinary shire
+# districts above Westminster (own precepts are small in GBP terms there,
+# so a normal cross-council spending difference produces a large ratio) -
+# see engine.build.compute_single_pot_bias_risk's docstring for the full
+# account of why a cash-share statistic replaced it outright, not
+# alongside it.
+# ---------------------------------------------------------------------------
+
+
+@requires_all_data
+def test_single_pot_bias_risk_reproduces_westminster_investigation_outlier_set():
+    """The cash-share statistic was adopted because it independently
+    reproduced, from first principles, the same five LAs the original
+    hand investigation flagged (Westminster, Wandsworth, Hammersmith and
+    Fulham, City of London, Kensington and Chelsea) - two different
+    routes landing on the same answer. Pins that outcome."""
+    bd = build_band_d(BAND_D_FILE)
+    risk = compute_single_pot_bias_risk(bd.la_year)
+    fy = risk[risk["financial_year"] == "2018-19"].dropna(subset=["single_pot_bias_risk"])
+    top5 = set(fy.sort_values("single_pot_bias_risk", ascending=False).head(5)["ons_code"])
+    expected = {"E09000033", "E09000032", "E09000013", "E09000001", "E09000020"}
+    assert top5 == expected, f"expected the five named inner-London outliers, got {fy.set_index('ons_code').loc[list(top5), 'authority'].tolist()}"
+
+
+@requires_all_data
+def test_westminster_and_wandsworth_are_a_severe_tier_above_the_rest():
+    """Westminster and Wandsworth's risk scores both exceed 1.0 (their
+    cash divergence from peers is worth more than their own entire
+    discounted bill) and sit roughly 2.4x above the next tier
+    (Hammersmith and Fulham) - a real structural break, not a smooth
+    decline, which is why the caveat names two severity tiers rather than
+    a single flat list of five."""
+    bd = build_band_d(BAND_D_FILE)
+    risk = compute_single_pot_bias_risk(bd.la_year)
+    fy = risk[risk["financial_year"] == "2018-19"].set_index("ons_code")
+    assert fy.loc["E09000033", "single_pot_bias_risk"] > 1.0  # Westminster
+    assert fy.loc["E09000032", "single_pot_bias_risk"] > 1.0  # Wandsworth
+    assert fy.loc["E09000013", "single_pot_bias_risk"] < 0.6  # Hammersmith and Fulham
+
+
+@requires_all_data
+def test_wandsworth_gap_is_inflated_the_same_way_as_westminster(engine_result):
+    """Wandsworth's risk score (1.03) is essentially Westminster's (1.06),
+    and this test confirms that shows up in the computed GAP too, not just
+    the risk statistic: both variants' percentage gaps for Wandsworth are
+    within a few points of Westminster's - the same mechanism, not a
+    coincidence of the risk formula."""
+    fy = engine_result.la_year[engine_result.la_year["financial_year"] == "2018-19"].set_index("ons_code")
+    westminster_v1_pct = fy.loc["E09000033", "variant1_gap"] / fy.loc["E09000033", "variant1_cf"]
+    wandsworth_v1_pct = fy.loc["E09000032", "variant1_gap"] / fy.loc["E09000032", "variant1_cf"]
+    westminster_v2_pct = fy.loc["E09000033", "variant2_gap"] / fy.loc["E09000033", "variant2_cf"]
+    wandsworth_v2_pct = fy.loc["E09000032", "variant2_gap"] / fy.loc["E09000032", "variant2_cf"]
+    assert wandsworth_v1_pct < -0.5  # both large negative gaps
+    assert wandsworth_v2_pct < -0.5
+    assert abs(westminster_v1_pct - wandsworth_v1_pct) < 0.05
+    assert abs(westminster_v2_pct - wandsworth_v2_pct) < 0.15
+
+
+@requires_all_data
+def test_headline_northern_las_get_unmeasured_not_clean_risk_score():
+    """Hartlepool, County Durham and Blackpool are standalone unitary
+    authorities with no real precepting-group peer in
+    boundaries.precepting_groups - this statistic CANNOT measure their
+    divergence and must say so (NaN), not silently read as zero/clean.
+    Their low exposure (compute_shared_tier_exposure, ~14-16%) is the only
+    thing that actually supports "the headline is largely unaffected" -
+    see 02_method.ipynb, which must not let a NaN here read as a pass."""
+    bd = build_band_d(BAND_D_FILE)
+    risk = compute_single_pot_bias_risk(bd.la_year)
+    fy = risk[risk["financial_year"] == "2018-19"].set_index("ons_code")
+    for code in ("E06000001", "E06000047", "E06000009"):  # Hartlepool, County Durham, Blackpool
+        assert fy.loc[code, "single_pot_bias_risk"] != fy.loc[code, "single_pot_bias_risk"]  # NaN != NaN
+
+
+@requires_all_data
+def test_ctsop_suppressed_band_counts_do_not_silently_zero_an_las_revenue(engine_result):
+    """Regression test for a real bug found while investigating the risk
+    statistic above: CTSOP blanks small band counts (disclosure
+    suppression), parsed as NaN. `v or 0` does not catch NaN (NaN is
+    truthy in Python), so it propagated into the tax-base sum, and pandas'
+    skipna groupby-sum then silently collapsed an all-NaN group to exactly
+    0.0 - City of London read as GBP0 actual revenue for 2017-18 onward
+    before the fix (engine.build._safe_count). Pins that it no longer
+    does."""
+    fy = engine_result.la_year[engine_result.la_year["financial_year"] == "2018-19"].set_index("ons_code")
+    assert fy.loc["E09000001", "actual"] > 1_000_000  # City of London

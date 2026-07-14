@@ -556,6 +556,66 @@ than used to silently adjust any of them — see
 `tests/test_engine.py::test_westminster_high_exposure_hartlepool_low_exposure`
 and `test_exposure_is_bimodal_by_authority_type`.
 
+**Exposure alone can't say whether a gap IS distorted, only whether it
+COULD be** — that needs the LA's own precept to actually diverge, in cash
+terms, from its precepting-group peers (`boundaries/precepting_groups.py`:
+shire county / metropolitan county / Greater London, sourced from ONS's
+real "LAD to County (December 2024)" lookup — 63 standalone unitary
+authorities have no such peer group and get `NaN`, not a false zero).
+`engine.build.compute_single_pot_bias_risk` computes this second
+condition. **First version was a ratio (own precept ÷ peer-group median)
+and it was wrong**: it ranked ordinary shire districts above Westminster —
+Oxford scored higher because its own precept (£303.80) is ~50% above its
+Oxfordshire peers' (£202.86 median), a large ratio on a small base (£101
+cash, on a ~£1,900 bill), while Westminster's own precept (£417.86) is 64%
+*below* its Greater London peers' (a smaller ratio, 0.36) but on a much
+larger base (a £755.97 cash gap, on a £712.09 bill). Since the reallocation
+this explains sums actual pounds, the distortion it produces is a pound
+quantity, not a percentage — a ratio measures how proportionally unusual
+an LA's spending is, a real fact about Oxford irrelevant to whether
+single-pot mangles its gap. **Replaced outright**, not kept alongside:
+`single_pot_bias_risk = |own precept − peer-group median own precept| ÷
+own area-total bill`.
+
+This independently reproduces, from a completely different starting point,
+the same five LAs the original Westminster investigation found by hand —
+Westminster (1.06), Wandsworth (1.03), Hammersmith and Fulham (0.44), City
+of London (0.34), Kensington and Chelsea (0.29). Westminster and
+Wandsworth form a genuinely distinct top tier (risk > 1.0 — their cash
+divergence from peers exceeds their own entire discounted bill — roughly
+2.4x the next-highest LA), so the caveat names two severity tiers rather
+than one flat list of five. Checked directly, not assumed: Wandsworth's
+computed gap is inflated the same way Westminster's is, not just its risk
+score — both variants' percentage gaps sit within a few points of each
+other (Variant 1: −64.7% vs −63.8%; Variant 2: −84.0% vs −75.2%).
+
+**A NaN here cannot vindicate an LA, only fail to indict it.** Hartlepool,
+County Durham and Blackpool get `NaN` (no real peer group), so this
+statistic says nothing about them either way. What actually supports "the
+Northern headline figures are largely clean" remains `shared_tier_share`
+alone (14-16%, above) — a real, independent bound unaffected by this gap.
+02_method.ipynb states this distinction explicitly rather than letting a
+NaN read as a pass. See
+`tests/test_engine.py::test_single_pot_bias_risk_reproduces_westminster_investigation_outlier_set`,
+`test_westminster_and_wandsworth_are_a_severe_tier_above_the_rest`,
+`test_wandsworth_gap_is_inflated_the_same_way_as_westminster`, and
+`test_headline_northern_las_get_unmeasured_not_clean_risk_score`.
+
+**A real bug was found and fixed while building this, not a modelling
+choice.** CTSOP suppresses small band counts as blank cells (disclosure
+control), parsed as `NaN`. The original liability code used `count or 0`
+to default missing counts to zero — but `NaN` is truthy in Python, so
+`nan or 0` evaluates to `nan`, and pandas' default skip-NaN group-sum then
+silently collapsed an all-`NaN` group to exactly `0.0`. City of London —
+one of the five LAs above — read as **£0 actual revenue for 2017-18
+onward** before the fix; found only because its risk score looked wrong.
+Fixed (`engine.build._safe_count`) and pinned with a regression test
+(`test_ctsop_suppressed_band_counts_do_not_silently_zero_an_las_revenue`).
+Scope checked directly: 13 (LA, year) cells across the whole headline
+period, 2 LAs total (City of London, 2017-18 onward; Tamworth, 2009-10 to
+2012-13) — small in aggregate, but not a coincidence that finding it
+mattered exactly where a named outlier's number was being reported.
+
 Both variants correctly show the headline direction throughout: Kensington
 and Chelsea's cumulative gap is negative (paid less than a
 value-proportional counterfactual) and Hartlepool's is positive (paid

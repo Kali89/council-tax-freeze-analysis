@@ -100,6 +100,7 @@ import pandas as pd
 
 from council_tax_freeze.boundaries.crosswalk import AmbiguousBoundaryChange, UnmappedLocalAuthorityCode, resolve
 from council_tax_freeze.boundaries.lad_2025 import LAD_2025_CODES
+from council_tax_freeze.boundaries.precepting_groups import PRECEPTING_GROUP
 from council_tax_freeze.config import (
     BAND_MULTIPLIER,
     COLLECTION_FACTOR,
@@ -110,6 +111,21 @@ from council_tax_freeze.config import (
 )
 
 BANDS = ENGLAND_BANDS  # ["A", ..., "H"]
+
+
+def _safe_count(v: float | None) -> float:
+    """CTSOP suppresses small band counts as blank cells, parsed as NaN, not
+    0 (parsers/ctsop/parse.py). `v or 0` looks like it handles this but does
+    not: NaN is truthy in Python, so `nan or 0` evaluates to `nan`, not 0,
+    and that NaN then silently zeroes an LA's ENTIRE actual/counterfactual
+    liability for that year once pandas' skipna groupby-sum collapses an
+    all-NaN group to 0.0 - found via City of London (E09000001) reading as
+    exactly GBP0 actual revenue for 2017-18 onward, while investigating the
+    single-pot bias risk statistic; also affects Tamworth (E07000199),
+    2009-10 to 2012-13. 13 (LA, year) cells total in the headline period,
+    2 LAs - small, but City of London is one of the named single-pot
+    outliers, so silently wrong there specifically mattered."""
+    return 0.0 if v is None or (isinstance(v, float) and math.isnan(v)) else v
 
 
 class UnresolvedLiabilityRow(Exception):
@@ -301,7 +317,7 @@ def _compute_row_liabilities(
             continue
 
         band_d_rate = r["band_d_incl_parish"]
-        tax_base_actual = sum((counts[b] or 0) * BAND_MULTIPLIER[b] for b in BANDS)
+        tax_base_actual = sum(_safe_count(counts[b]) * BAND_MULTIPLIER[b] for b in BANDS)
         actual = band_d_rate * tax_base_actual * COLLECTION_FACTOR
 
         for target_code, _target_name, weight in resolved:
@@ -316,7 +332,7 @@ def _compute_row_liabilities(
             v1_base = 0.0
             v2_base = 0.0
             for b in BANDS:
-                count = counts[b] or 0
+                count = _safe_count(counts[b])
                 if not count:
                     continue
                 relative_value = midpoints[b] * (hpi_factor / national_hpi_factor)
@@ -397,3 +413,65 @@ def compute_shared_tier_exposure(band_d_la_year: pd.DataFrame) -> pd.DataFrame:
     df = df[df["band_d_incl_parish"].notna() & df["own_precept_incl_parish"].notna()]
     df["shared_tier_share"] = 1 - (df["own_precept_incl_parish"] / df["band_d_incl_parish"])
     return df[["ons_code", "authority", "financial_year", "shared_tier_share"]]
+
+
+def compute_single_pot_bias_risk(band_d_la_year: pd.DataFrame) -> pd.DataFrame:
+    """The Westminster mechanism needs an LA's own (district/unitary)
+    precept to diverge from its peers - other LAs sharing the same
+    non-own tiers (boundaries.precepting_groups.PRECEPTING_GROUP: shire
+    county, metropolitan county, or Greater London). compute_shared_tier_
+    exposure alone cannot show this: it only bounds how much of a bill
+    COULD be mis-reallocated, not whether it actually is.
+
+    First built and shipped as a RATIO (own precept / peer median own
+    precept), per an interaction-statistic request phrased as "exposure x
+    divergence". Run against real data, it ranked ordinary shire districts
+    (Oxford, Ipswich, Pendle...) above Westminster - because shire own-
+    precepts are small in cash terms (GBP150-300), so an ordinary,
+    undistorting difference in service levels between neighbouring
+    councils produces a large ratio, while Westminster's own precept is
+    large (GBP400+), so its genuinely enormous cash gap from peers produces
+    a comparatively smaller one. Wrong statistic for a mechanism that is
+    denominated in pounds, not percent: the reallocation formula sums
+    actual GBP revenue, so the distortion it produces is a GBP quantity,
+    and a proportional measure answers "how unusual is this LA," not "how
+    many pounds does that unusualness move" - the two come apart exactly
+    when denominators differ by an order of magnitude, i.e. precisely the
+    shire-district-vs-London-borough case. Replaced, not patched over -
+    see the project log for the ratio version and why it was dropped
+    rather than kept alongside.
+
+    `abs_divergence_gbp` = an LA's own precept minus the MEDIAN own precept
+    among LAs in the same precepting group that same year (signed: negative
+    means below peers, as for Westminster).
+
+    `single_pot_bias_risk` = |abs_divergence_gbp| / band_d_incl_parish (the
+    LA's own full area-total bill) - the cash divergence expressed as a
+    share of what that LA actually charges. Can exceed 1.0 (the divergence
+    is worth more than the LA's whole discounted bill) - not a bug, and in
+    fact the clearest way this statistic has of flagging an extreme case:
+    both Westminster and Wandsworth do, at 1.06 and 1.03 respectively.
+    Independently reproduces the same outlier set the original Westminster
+    investigation found by hand (Westminster, Wandsworth, Hammersmith and
+    Fulham, City of London, Kensington and Chelsea) - two different routes
+    to the same answer.
+
+    63 standalone unitary authorities (Cornwall, County Durham, Hartlepool,
+    etc. - see precepting_groups.py) have no real peer group in this
+    lookup and get `abs_divergence_gbp = NaN`, `single_pot_bias_risk = NaN`
+    - UNMEASURED, not zero. This statistic cannot vindicate them; it can
+    only fail to indict them. Their exposure share (compute_shared_tier_
+    exposure) is what actually carries any claim that they are clean, and
+    is unaffected by this gap."""
+    exposure = compute_shared_tier_exposure(band_d_la_year)
+    own = band_d_la_year[band_d_la_year["financial_year"].isin(HEADLINE_YEARS)][["ons_code", "financial_year", "own_precept_incl_parish", "band_d_incl_parish"]]
+    df = exposure.merge(own, on=["ons_code", "financial_year"])
+    df["precepting_group"] = df["ons_code"].map(PRECEPTING_GROUP)
+
+    group_size = df.groupby(["precepting_group", "financial_year"])["ons_code"].transform("nunique")
+    peer_median = df.groupby(["precepting_group", "financial_year"])["own_precept_incl_parish"].transform("median")
+    df["abs_divergence_gbp"] = df["own_precept_incl_parish"] - peer_median
+    df.loc[group_size <= 1, "abs_divergence_gbp"] = float("nan")
+    df["single_pot_bias_risk"] = df["abs_divergence_gbp"].abs() / df["band_d_incl_parish"]
+
+    return df[["ons_code", "authority", "financial_year", "shared_tier_share", "abs_divergence_gbp", "single_pot_bias_risk"]]
