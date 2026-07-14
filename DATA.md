@@ -409,3 +409,66 @@ this analysis. Note this is *not* the published in-year collection rate
 (~97%) — it is a broader effective discount factor reflecting exemptions,
 discounts, and support as well as non-collection, calibrated so aggregate
 net receipts match published totals.
+
+## Phase 4: two more resolution mismatches found while joining Band D to CTSOP
+
+Building the engine surfaced two further cross-series join problems beyond
+the ones already documented above — both found by the engine's own
+unresolved-row diagnostics, neither anticipated in advance.
+
+**Barnsley/Sheffield code alias (bug, fixed).** Band D applies Barnsley's
+and Sheffield's *post-2025* codes retroactively across their whole history
+(same pattern as Bedford, see above) - but CTSOP's consolidated file uses
+the *pre-2025* codes until 2025. Same real-world geography, two different
+code labels, for every year before 2025. Not a data gap: fixed in
+`engine/build.py` (`_recode_aliases`) by indexing the CTSOP lookup under
+both codes for the affected years.
+
+**Suffolk/Somerset 2019 predecessors: no CTSOP row at any resolution.**
+Unlike every other merge event (including the rest of the 2019 wave -
+Dorset, BCP), West Suffolk, East Suffolk and Somerset West and Taunton's
+predecessors (Forest Heath, St Edmundsbury, Suffolk Coastal, Waveney,
+Taunton Deane, West Somerset) have NO row in CTSOP at all, at any
+resolution - VOA retroactively aggregated them the same way it did the
+2009 wave, rather than leaving real predecessor rows the way it did for
+Dorset/BCP. Quantified before deciding treatment, using the same framework
+as the County Durham decision above: combined, these six predecessors
+held ~0.8% of England's dwelling stock in 2015-16 (vs 6.3% for the 2009
+wave - an order of magnitude smaller), and their Band D rates differ by
+0-3.7% within each merging pair (vs ~16% for Durham's predecessors - also
+an order of magnitude smaller). Neither Suffolk (East of England) nor
+Somerset (South West) sits on the North/South fault line this analysis
+measures. By the same decision logic as the 2009-wave gap: this is a
+documented limitation, not a second backward-extension case. Fixed with an
+**equal split** of the immediate successor's real combined CTSOP count
+across its sibling predecessors, each then charged at its OWN real Band D
+rate (not an averaged rate) — `engine/build.py` (`_equal_split_fallback`).
+Result: zero unresolved rows across the entire headline period
+(2009-10 to 2025-26, 296 LAs × 17 years = 5,032 rows), confirmed by test.
+
+## Phase 4: the IFS gate
+
+Per the project's own methodology standard: the engine's implied FY2018-19
+LA-level redistribution was checked against IFS (2020)'s own published
+Table 4.1/4.2/4.4 figures for named local authorities **before** the
+cumulative headline series was trusted, and the check was run as a gate —
+fail and stop, not fail and tune. Result: **pass**, with two honestly
+reported discrepancies, neither smoothed over:
+
+- **Variant 1 (pure revaluation) vs IFS's Option 1**: 14 of 15 named LAs
+  match sign. The one miss is Bristol (IFS +12%, ours ~0%) — itself one of
+  IFS's smallest listed effects, and exactly the kind of borderline,
+  near-threshold case our coarser "whole cohort moves together" band
+  reassignment (see `engine/build.py` module docstring) would be expected
+  to handle worst, since it can't move part of a band's stock across a
+  threshold the way IFS's property-level data can.
+- **Variant 2 (proportional) vs IFS's Option 5**: 8 of 8 named LAs match
+  sign. Magnitudes are broadly comparable for most (e.g. Hartlepool -64%
+  vs IFS's -61%; Kensington and Chelsea +310% vs IFS's +246%), but
+  Westminster is a notable outlier (+525% vs IFS's +175%, roughly 3x too
+  high) — flagged, not investigated further or tuned away in this pass.
+
+Both variants also correctly show the headline direction: Kensington and
+Chelsea's cumulative gap is negative (paid less than a value-proportional
+counterfactual) and Hartlepool's is positive (paid more), under both
+variants, over the whole headline period — see `tests/test_engine.py`.

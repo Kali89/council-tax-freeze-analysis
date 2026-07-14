@@ -77,6 +77,7 @@ def _load_hpi(path) -> pd.DataFrame:
 class HPIResult:
     la_factors: pd.DataFrame  # ons_code, financial_year, hpi_factor_la (regional fallback applied where needed)
     region_factors: pd.DataFrame  # region_code, financial_year, hpi_factor_region
+    national_factors: pd.DataFrame  # financial_year, hpi_factor_national (England, E92000001) - used by the engine to rescale band thresholds for Variant 1
     coverage: pd.DataFrame  # financial_year, n_la, n_fallback
     validation: pd.DataFrame  # region_code, name, ratio, anchor_min, anchor_max, within_tolerance
 
@@ -100,13 +101,16 @@ def build_hpi(path) -> HPIResult:
 
     la = df[df["AreaCode"].str.match(LA_CODE_RE)].copy()
     region = df[df["AreaCode"].str.match(REGION_CODE_RE)].copy()
+    national = df[df["AreaCode"] == "E92000001"].copy()
 
     la_baseline = la[la["Date"] == baseline_date].set_index("AreaCode")["AveragePrice"]
     region_baseline = region[region["Date"] == baseline_date].set_index("AreaCode")["AveragePrice"]
+    national_baseline = national[national["Date"] == baseline_date]["AveragePrice"].values[0]
 
     fys = _financial_years(EXTENSION_FIRST_YEAR, LAST_YEAR)
     la_rows = []
     region_rows = []
+    national_rows = []
     coverage_rows = []
 
     for fy in fys:
@@ -116,6 +120,10 @@ def build_hpi(path) -> HPIResult:
         region_factor = (region_snap / region_baseline).dropna()
         for code, factor in region_factor.items():
             region_rows.append({"region_code": code, "financial_year": fy, "hpi_factor_region": factor})
+
+        national_snap = national[national["Date"] == sample_date]["AveragePrice"]
+        if len(national_snap):
+            national_rows.append({"financial_year": fy, "hpi_factor_national": national_snap.values[0] / national_baseline})
 
         la_snap = la[la["Date"] == sample_date].set_index("AreaCode")["AveragePrice"]
         la_factor = (la_snap / la_baseline).dropna()
@@ -146,6 +154,7 @@ def build_hpi(path) -> HPIResult:
 
     la_factors = pd.DataFrame(la_rows).sort_values(["financial_year", "ons_code"])
     region_factors = pd.DataFrame(region_rows).sort_values(["financial_year", "region_code"])
+    national_factors = pd.DataFrame(national_rows).sort_values("financial_year")
     coverage = pd.DataFrame(coverage_rows)
 
     validation = _validate_against_ifs(df)
@@ -153,7 +162,9 @@ def build_hpi(path) -> HPIResult:
     if len(failures):
         raise HPIValidationError(f"IFS regional-ratio anchor(s) failed to reproduce:\n{failures.to_string(index=False)}")
 
-    return HPIResult(la_factors=la_factors, region_factors=region_factors, coverage=coverage, validation=validation)
+    return HPIResult(
+        la_factors=la_factors, region_factors=region_factors, national_factors=national_factors, coverage=coverage, validation=validation
+    )
 
 
 def _validate_against_ifs(df: pd.DataFrame) -> pd.DataFrame:
