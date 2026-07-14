@@ -27,6 +27,7 @@ from council_tax_freeze.boundaries.crosswalk import (
 )
 from council_tax_freeze.boundaries.lad_2025 import LAD_2025_CODES
 from council_tax_freeze.boundaries.precepting_groups import PRECEPTING_GROUP
+from council_tax_freeze.boundaries.regions import REGION
 from council_tax_freeze.boundaries.reorg_events import (
     EVENTS,
     Apportionment,
@@ -318,6 +319,19 @@ def test_precepting_group_covers_every_2025_la_exactly_once():
     # or it isn't doing anything a singleton wouldn't
     assert all(sizes[g] >= 2 for g in grouped)
     assert sizes["Greater London"] == 33, "32 boroughs + City of London"
+
+
+def test_region_covers_every_2025_la_exactly_once_in_nine_regions():
+    assert set(REGION.keys()) == LAD_2025_CODES
+    assert set(REGION.values()) == {
+        "North East", "North West", "Yorkshire and The Humber", "East Midlands",
+        "West Midlands", "East of England", "London", "South East", "South West",
+    }
+    from collections import Counter
+
+    counts = Counter(REGION.values())
+    assert counts["North East"] == 12
+    assert counts["London"] == 33
 
 
 # ---------------------------------------------------------------------------
