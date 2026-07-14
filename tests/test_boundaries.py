@@ -27,7 +27,7 @@ from council_tax_freeze.boundaries.crosswalk import (
 )
 from council_tax_freeze.boundaries.lad_2025 import LAD_2025_CODES
 from council_tax_freeze.boundaries.precepting_groups import PRECEPTING_GROUP
-from council_tax_freeze.boundaries.regions import REGION
+from council_tax_freeze.boundaries.regions import REGION, REGION_CODE
 from council_tax_freeze.boundaries.reorg_events import (
     EVENTS,
     Apportionment,
@@ -332,6 +332,20 @@ def test_region_covers_every_2025_la_exactly_once_in_nine_regions():
     counts = Counter(REGION.values())
     assert counts["North East"] == 12
     assert counts["London"] == 33
+
+
+def test_region_code_agrees_with_region_name():
+    assert set(REGION_CODE.keys()) == LAD_2025_CODES
+    assert REGION_CODE["E06000001"] == "E12000001"  # Hartlepool -> North East
+    assert REGION_CODE["E09000033"] == "E12000007"  # Westminster -> London
+    # every code must be internally consistent with the name dict: same
+    # partition, just a different label for each block
+    from collections import defaultdict
+
+    name_to_codes = defaultdict(set)
+    for la, name in REGION.items():
+        name_to_codes[name].add(REGION_CODE[la])
+    assert all(len(codes) == 1 for codes in name_to_codes.values())
 
 
 # ---------------------------------------------------------------------------

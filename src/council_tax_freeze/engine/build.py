@@ -102,6 +102,8 @@ from council_tax_freeze.boundaries.crosswalk import AmbiguousBoundaryChange, Unm
 from council_tax_freeze.boundaries.lad_2025 import LAD_2025_CODES
 from council_tax_freeze.boundaries.precepting_groups import PRECEPTING_GROUP
 from council_tax_freeze.config import (
+    BAND_A_RATIO,
+    BAND_H_RATIO,
     BAND_MULTIPLIER,
     COLLECTION_FACTOR,
     ENGLAND_BANDS,
@@ -144,11 +146,13 @@ def _financial_years(first: str, last: str) -> list[str]:
 HEADLINE_YEARS = _financial_years(HEADLINE_FIRST_YEAR, LAST_YEAR)
 
 
-def _multiplier_control_points() -> tuple[list[float], list[float]]:
+def _multiplier_control_points(band_a_ratio: float = BAND_A_RATIO, band_h_ratio: float = BAND_H_RATIO) -> tuple[list[float], list[float]]:
     """(log(band midpoint), multiplier) control points, sorted ascending -
     the real system's own eight points, used to build the smooth
-    compressed-multiplier curve. Not re-derived per call."""
-    midpoints = band_midpoints_1991()
+    compressed-multiplier curve. Parameterised by the two open-band ratios
+    so sensitivity/sweep.py can rebuild the curve for each grid cell
+    without touching the base-case module-level constants below."""
+    midpoints = band_midpoints_1991(band_a_ratio, band_h_ratio)
     pairs = sorted((midpoints[b], BAND_MULTIPLIER[b]) for b in BANDS)
     log_points = [math.log(v) for v, _m in pairs]
     mult_points = [m for _v, m in pairs]
@@ -159,34 +163,40 @@ _LOG_POINTS, _MULT_POINTS = _multiplier_control_points()
 _D_MIDPOINT = band_midpoints_1991()["D"]
 
 
-def _compressed_multiplier(value: float) -> float:
+def _compressed_multiplier(value: float, log_points: list[float] = _LOG_POINTS, mult_points: list[float] = _MULT_POINTS) -> float:
     """Smooth, monotonic interpolation of the real 6/9-18/9 multiplier
     structure as a continuous function of value - piecewise-linear in
     log(value) between the eight band-midpoint control points, linearly
     extrapolated (same slope as the nearest segment) beyond Band A and
     Band H. See module docstring for why this replaces discrete band
-    reassignment."""
+    reassignment. `log_points`/`mult_points` default to the base-case
+    control points but accept an alternate pair (see
+    `_multiplier_control_points`) for the midpoint-ratio sensitivity grid."""
     if value <= 0:
-        return _MULT_POINTS[0]
+        return mult_points[0]
     logv = math.log(value)
-    if logv <= _LOG_POINTS[0]:
-        slope = (_MULT_POINTS[1] - _MULT_POINTS[0]) / (_LOG_POINTS[1] - _LOG_POINTS[0])
-        return _MULT_POINTS[0] + slope * (logv - _LOG_POINTS[0])
-    if logv >= _LOG_POINTS[-1]:
-        slope = (_MULT_POINTS[-1] - _MULT_POINTS[-2]) / (_LOG_POINTS[-1] - _LOG_POINTS[-2])
-        return _MULT_POINTS[-1] + slope * (logv - _LOG_POINTS[-1])
-    for i in range(len(_LOG_POINTS) - 1):
-        if _LOG_POINTS[i] <= logv <= _LOG_POINTS[i + 1]:
-            frac = (logv - _LOG_POINTS[i]) / (_LOG_POINTS[i + 1] - _LOG_POINTS[i])
-            return _MULT_POINTS[i] + frac * (_MULT_POINTS[i + 1] - _MULT_POINTS[i])
+    if logv <= log_points[0]:
+        slope = (mult_points[1] - mult_points[0]) / (log_points[1] - log_points[0])
+        return mult_points[0] + slope * (logv - log_points[0])
+    if logv >= log_points[-1]:
+        slope = (mult_points[-1] - mult_points[-2]) / (log_points[-1] - log_points[-2])
+        return mult_points[-1] + slope * (logv - log_points[-1])
+    for i in range(len(log_points) - 1):
+        if log_points[i] <= logv <= log_points[i + 1]:
+            frac = (logv - log_points[i]) / (log_points[i + 1] - log_points[i])
+            return mult_points[i] + frac * (mult_points[i + 1] - mult_points[i])
     raise AssertionError("unreachable - log_points must be sorted and cover logv by the checks above")
 
 
-def _proportional_multiplier(value: float) -> float:
+def _proportional_multiplier(value: float, d_midpoint: float = _D_MIDPOINT) -> float:
     """Variant 2: 'Variant 1 with the compression removed' - the same
     relative value, a linear (uncompressed) multiplier in place of
-    `_compressed_multiplier`. See module docstring."""
-    return value / _D_MIDPOINT
+    `_compressed_multiplier`. `d_midpoint` defaults to the base-case Band D
+    midpoint but accepts an alternate (see `band_midpoints_1991`) for the
+    midpoint-ratio sensitivity grid - Band D is always bounded so its
+    midpoint never actually depends on band_a_ratio/band_h_ratio, but
+    threading it through keeps this symmetric with `_compressed_multiplier`."""
+    return value / d_midpoint
 
 
 def _recode_aliases() -> dict[str, str]:
@@ -277,13 +287,25 @@ def _compute_row_liabilities(
     ctsop_lookup: dict,
     hpi_factor_lookup: dict,
     national_hpi_factor_lookup: dict,
+    band_a_ratio: float = BAND_A_RATIO,
+    band_h_ratio: float = BAND_H_RATIO,
+    collection_factor: float = COLLECTION_FACTOR,
 ) -> tuple[list[RowLiability], list[dict]]:
     """One row per Band D (ons_code, financial_year) present in the
-    headline period. Returns (resolved rows, unresolved-row diagnostics)."""
+    headline period. Returns (resolved rows, unresolved-row diagnostics).
+    `band_a_ratio`/`band_h_ratio`/`collection_factor` default to the base
+    case (config.py) but are parameterised for sensitivity/sweep.py - when
+    given non-default ratios, the multiplier curve is rebuilt for this call
+    only, not read from the module-level `_LOG_POINTS`/`_MULT_POINTS`."""
     band_d = band_d_la_year[band_d_la_year["financial_year"].isin(HEADLINE_YEARS)]
     band_d = band_d[band_d["band_d_incl_parish"].notna()]
 
-    midpoints = band_midpoints_1991()
+    midpoints = band_midpoints_1991(band_a_ratio, band_h_ratio)
+    if band_a_ratio == BAND_A_RATIO and band_h_ratio == BAND_H_RATIO:
+        log_points, mult_points, d_midpoint = _LOG_POINTS, _MULT_POINTS, _D_MIDPOINT
+    else:
+        log_points, mult_points = _multiplier_control_points(band_a_ratio, band_h_ratio)
+        d_midpoint = midpoints["D"]
     equal_split = _equal_split_fallback()
     rows: list[RowLiability] = []
     unresolved: list[dict] = []
@@ -318,7 +340,7 @@ def _compute_row_liabilities(
 
         band_d_rate = r["band_d_incl_parish"]
         tax_base_actual = sum(_safe_count(counts[b]) * BAND_MULTIPLIER[b] for b in BANDS)
-        actual = band_d_rate * tax_base_actual * COLLECTION_FACTOR
+        actual = band_d_rate * tax_base_actual * collection_factor
 
         for target_code, _target_name, weight in resolved:
             if target_code not in LAD_2025_CODES:
@@ -336,8 +358,8 @@ def _compute_row_liabilities(
                 if not count:
                     continue
                 relative_value = midpoints[b] * (hpi_factor / national_hpi_factor)
-                v1_base += count * _compressed_multiplier(relative_value)
-                v2_base += count * _proportional_multiplier(relative_value)
+                v1_base += count * _compressed_multiplier(relative_value, log_points, mult_points)
+                v2_base += count * _proportional_multiplier(relative_value, d_midpoint)
 
             rows.append(
                 RowLiability(
@@ -367,12 +389,23 @@ def build_engine(
     ctsop_predecessor_weights: pd.DataFrame,
     hpi_la_factors: pd.DataFrame,
     hpi_national_factors: pd.DataFrame,
+    band_a_ratio: float = BAND_A_RATIO,
+    band_h_ratio: float = BAND_H_RATIO,
+    collection_factor: float = COLLECTION_FACTOR,
 ) -> EngineResult:
+    """`band_a_ratio`/`band_h_ratio`/`collection_factor` default to the base
+    case and only need overriding by sensitivity/sweep.py. `hpi_la_factors`
+    accepts any (ons_code, financial_year) -> factor table with an
+    `hpi_factor_la` column - sweep.py passes region-broadcast or
+    revaluation-frequency-adjusted variants through this same parameter
+    rather than needing a separate code path in this module."""
     ctsop_lookup = _ctsop_lookup(ctsop_la_year, ctsop_predecessor_weights)
     hpi_factor_lookup = {(r["ons_code"], r["financial_year"]): r["hpi_factor_la"] for _, r in hpi_la_factors.iterrows()}
     national_hpi_factor_lookup = {r["financial_year"]: r["hpi_factor_national"] for _, r in hpi_national_factors.iterrows()}
 
-    rows, unresolved = _compute_row_liabilities(band_d_la_year, ctsop_lookup, hpi_factor_lookup, national_hpi_factor_lookup)
+    rows, unresolved = _compute_row_liabilities(
+        band_d_la_year, ctsop_lookup, hpi_factor_lookup, national_hpi_factor_lookup, band_a_ratio, band_h_ratio, collection_factor
+    )
     unresolved_df = pd.DataFrame(unresolved)
 
     row_df = pd.DataFrame([r.__dict__ for r in rows])
