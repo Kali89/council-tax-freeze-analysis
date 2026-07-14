@@ -154,6 +154,87 @@ going through the Phase 1 crosswalk, and it's the reason Band D's dwelling
 weights for those predecessor rates have to come from a different source
 than CTSOP for the 2009 wave specifically (see above).
 
+**The 2009-wave dwelling-count gap: quantified, and NOT resolved here —
+this is an open decision for Phase 4, not something to decide implicitly
+inside a parser.** Band D preserves the six-to-seven separate predecessor
+rates for each 2009-wave county (e.g. six different Durham district rates
+pre-2009); CTSOP retroactively aggregates them into one successor dwelling
+count with no predecessor-level breakdown. Every band-weighted calculation
+in the counterfactual engine needs `count[i,b,t]` at the same resolution as
+the rate — for the 2009-wave areas pre-2009, we don't have that.
+
+*Exposure*, cross-checked from two independent sources so the number isn't
+an artefact of one methodology: the seven 2009-wave areas (Cornwall,
+County Durham, Northumberland, Shropshire, Wiltshire, Bedfordshire,
+Cheshire) held **~6.3% of England's dwelling stock** throughout 2000-2008 —
+6.29-6.34% from VOA CTSOP's own retroactively-aggregated totals (2000, 2005,
+2008), 6.32-6.37% from MHCLG's separately-sourced Dwelling Stock Estimates
+summed across the real predecessor rows (2001, 2005, 2008). This is
+materially above a "~5%, live with it" threshold. It also isn't uniform
+risk: predecessor-level Band D rates within a county are not always close
+together — Cornwall's six 2000-01 rates span £804.57-£832.93 (a tight
+~3.5% range, where an unweighted average would barely differ from a
+dwelling-weighted one), but County Durham's six available predecessor rates
+(missing Durham City, per the Band D gap above) span £867.69-£1,009.34 (a
+~16% range, where the weighting choice materially changes the answer). Durham
+and Northumberland are North East authorities — exactly the low-appreciation
+end of the North/South comparison this project exists to measure, so a
+weighting bias here does not average out harmlessly elsewhere.
+
+*Does the granular historic data exist?* Checked directly, not assumed:
+
+- **Individual historic VOA CTSOP releases (2000-2009) with predecessor
+  rows intact: not found**, despite real archival research, not just a
+  cursory check. Queried the UK Government Web Archive's CDX API across the
+  entire `voa.gov.uk` domain for 2000-2009 (`/publications/*`,
+  `/council_tax/*`, `/publications/statistical_releases/*` — the last of
+  these has no captures before April 2010 at all), tried every plausible
+  filename pattern (`stock`, `band`, `dwelling`, `ctsop`, `valuation-list`,
+  `banding`), and fetched several promising pages directly (the archived
+  "Council Tax Valuation Lists 1993 England" page, dated September 2010,
+  shows only post-2009 geography). Also checked whether the local
+  government department (ODPM/CLG, MHCLG's predecessors) published this
+  independently of VOA in that era — no evidence found. The 2009-wave's
+  retroactive aggregation in the modern CTSOP file may be a reconstruction
+  VOA did once, internally, at the time of the 2009 reorg, rather than a
+  republishing of previously-separate published figures — consistent with
+  VOA's own statistics publishing function appearing to have solidified
+  around 2010 (see "VOA has moved its Council Tax work onto a new, modern
+  operating system", noted earlier in this file for the 2025 release).
+- **The ONS/MHCLG fallback DOES exist, partially**: MHCLG's "Live Table
+  125: Dwelling Stock Estimates by Local Authority District"
+  (`src/council_tax_freeze/download.py:fetch_mhclg_dwelling_stock_estimates`,
+  `data/dwelling_stock/LiveTable125.ods`) carries real, predecessor-level
+  **total** dwelling counts (not banded) for all 37 predecessor districts
+  across all seven 2009-wave counties, back to **2001** (one year short of
+  our 2000-01 start), with an "Old ONS code" / "New ONS code" pair per row.
+  Those old codes (e.g. Penwith = `15UF`) and new codes (Penwith =
+  `E07000023`) independently cross-validate the Phase 1 predecessor codes
+  resolved against the ONS Code History Database — an unplanned but genuine
+  second confirmation of that earlier work, from a completely different
+  MHCLG series.
+
+*What this means concretely*: real predecessor-level dwelling-count
+**weights** exist (Table 125, unbanded, 2001-2008 - the fallback the brief
+anticipated), but predecessor-level **band distributions** do not exist
+anywhere found. The only way to get band-level predecessor counts is
+imputation - e.g. applying each county's earliest observed post-2009 CTSOP
+band-share percentages back onto each predecessor's own Table 125 total, on
+the assumption that the relative band mix within a county was similar
+across its predecessor districts and stable over 2000-2009. That is a real,
+named assumption, not a neutral default, and it is likely wrong in a
+predictable direction (e.g. Penwith, historically a lower-value part of
+Cornwall, almost certainly has a poorer band mix than Carrick) - the sign of
+that bias has not been checked.
+
+**This is now flagged for an explicit decision before Phase 4 writes any
+weighting logic** — options include: (a) impute band shares as above and
+treat 2000-08 for the seven 2009-wave areas as a documented, lower-confidence
+segment; (b) use Table 125's unbanded totals for a coarser, band-agnostic
+weighting scheme for just those nine years; (c) exclude the 2009-wave areas'
+pre-2009 contribution from the headline series entirely and report them
+separately; (d) something else. Not decided here.
+
 **UK HPI (#3).** LA-level series start January 1995, not April 1991 — see
 the README's Framing section. A handful of LAs have suppressed or
 sparse series due to low transaction volumes (City of London, Isles of

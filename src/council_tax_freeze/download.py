@@ -79,11 +79,19 @@ def fetch_ons_lad_lookups() -> None:
 
 
 def fetch_ons_population_estimates() -> None:
-    """ONS mid-year population / dwelling stock estimates."""
+    """ONS mid-year population estimates - LA-level time series."""
     raise ManualDownloadRequired(
         "ONS mid-year population estimates:\n"
         "  https://www.ons.gov.uk/peoplepopulationandcommunity/populationandmigration/populationestimates\n"
         "  Download the LA-level time series, save to data/population/mye_by_la.csv"
+    )
+
+
+def fetch_mhclg_dwelling_stock_estimates() -> None:
+    """MHCLG Live Table 125, Dwelling Stock Estimates by LA District - predecessor-level (Old ONS code) rows back to 2001, unbanded. See DATA.md '2009-wave dwelling-count gap' for why this matters."""
+    _download(
+        "https://assets.publishing.service.gov.uk/media/6a0dcbf65c3c79da61662e39/LiveTable125.ods",
+        DATA_DIR / "dwelling_stock" / "LiveTable125.ods",
     )
 
 
@@ -150,6 +158,7 @@ FETCHERS = [
     fetch_ons_lad_boundaries,
     fetch_ons_lad_lookups,
     fetch_ons_population_estimates,
+    fetch_mhclg_dwelling_stock_estimates,
     fetch_mhclg_band_d,
     fetch_voa_ctsop,
     fetch_price_paid_calibration_slice,
