@@ -103,9 +103,18 @@ BAND_THRESHOLD_1991 = {
 # understates the counterfactual gap. The mirror argument applies to Band A
 # in the North. See notebooks/02_method.ipynb for the 12-combination
 # sensitivity grid (BAND_H_RATIO_GRID x BAND_A_RATIO_GRID below) that
-# demonstrates the headline gap's sign is robust across this whole range,
-# and for the Price Paid 1995-97 calibration check that spot-checks these
-# ratios against actual sale prices in a handful of LAs.
+# demonstrates the headline gap's sign is robust across this whole range.
+#
+# CHECKED, not just argued: src/council_tax_freeze/calibration/price_paid.py
+# deflates 1995-97 Price Paid sales to April-1991-equivalent values in four
+# LAs. Kensington and Chelsea / Westminster (thousands of sales each) show
+# a true empirical Band H tail at 2.06x / 1.78x - both ABOVE the assumed
+# 1.5x, confirming the assumption understates high-value stock. Blackpool /
+# Easington show Band A tails at 0.77x / 0.64x - AT OR BELOW the assumed
+# 0.75x, confirming the mirror argument independently. See DATA.md for the
+# full table and sample sizes (some cells are 1-3 sales and not to be
+# trusted; the two findings above are load-bearing, at thousands of sales
+# each).
 # ---------------------------------------------------------------------------
 BAND_A_RATIO = 0.75
 BAND_H_RATIO = 1.5

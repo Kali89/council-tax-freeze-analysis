@@ -352,12 +352,45 @@ to 296 from 2023-24 onward) match the known number of predecessor districts
 in every wave exactly - a genuine cross-check, not just "no exception was
 raised."
 
-**Price Paid calibration slice (#6).** Used only to sanity-check the
-Band A/H midpoint imputation ratios (see `notebooks/02_method.ipynb`) in a
-handful of local authorities. 1995-97 sale prices are deflated to an
-April-1991-equivalent using a single *national* HPI factor — a much smaller,
-self-contained assumption than doing this at LA level for the whole pipeline,
-and used only as a spot check, not as an input to the main counterfactual.
+**Price Paid calibration slice (#6) — run, with results.** Not a promise
+to check later; this ran in Phase 3. 1995-97 Price Paid sales in four
+local authorities (Kensington and Chelsea, City of Westminster — high
+value; Blackpool, Easington — low value; Easington used directly as a real
+predecessor district rather than the ambiguously-labelled "COUNTY DURHAM"
+field that also appears in the raw file) were deflated to an
+April-1991-equivalent value using a single *national* quarterly deflator
+(Nationwide's "UK house prices since 1952" series, Q2 1991 = baseline) —
+a much smaller, self-contained assumption than LA-level 1991-1995 bridging,
+which remains deliberately unbridged for the main pipeline (see README
+Framing). A non-market-transaction filter (floor + fraction-of-local-median,
+following Tax Policy Associates' published approach) was applied before
+drawing any conclusion from the tail.
+
+Result: `src/council_tax_freeze/calibration/price_paid.py`,
+`tests/test_price_paid_calibration.py`.
+
+| District | Band H empirical ratio (assumed 1.5) | n sales | Band A empirical ratio (assumed 0.75) | n sales |
+|---|---|---|---|---|
+| Kensington and Chelsea | **2.06** | 3,860 | n/a (0 sales below £40k) | 0 |
+| City of Westminster | **1.78** | 2,287 | n/a (0 sales below £40k) | 0 |
+| Blackpool | 2.66 (n too thin to trust) | 3 | **0.77** | 3,799 |
+| Easington | 1.06 (n too thin to trust) | 1 | **0.64** | 2,092 |
+
+The two high-value areas have thick samples (thousands of sales) and both
+show the true empirical Band H tail running well above the assumed 1.5x
+ratio — the assumption **understates** high-value stock, consistent with,
+and now empirically supporting rather than just theoretically asserting,
+the "conservative corner" framing already in `config.py` and
+`02_method.ipynb`. The two low-value areas' Band A ratios sit at or below
+the assumed 0.75x (Easington notably below, at 0.64x) — poorer
+predecessor districts' true low-value stock is likely *even poorer* than
+assumed, which independently reinforces the same conservative-corner
+conclusion via the opposite tail. Both effects point the same direction:
+the assumed ratios make the measured North/South gap smaller than a more
+empirically-grounded set would, not larger. Blackpool and Easington's own
+Band H figures are quoted for completeness but are statistically
+worthless (1 and 3 sales) — exactly what you'd expect in areas with almost
+no genuinely high-value 1990s stock, not a data error.
 
 **Settlement data (#7).** The naming and structure of this series changes
 more than council tax data does — Revenue Support Grant (pre-2013-ish),

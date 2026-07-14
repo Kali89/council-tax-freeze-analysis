@@ -130,11 +130,15 @@ def fetch_voa_ctsop() -> None:
 
 
 def fetch_price_paid_calibration_slice() -> None:
-    """HM Land Registry Price Paid Data, 1995 and 1996 annual files only (calibration check, not main pipeline). URL below is best-effort, not yet verified - Phase 3 will confirm or replace it."""
-    for year in (1995, 1996):
+    """HM Land Registry Price Paid Data, 1995-97 annual files (calibration check, not main pipeline) + Nationwide's national quarterly HPI back to 1952, for the single-national-deflator baseline. Phase 0's best-effort Price Paid URL was verified correct in Phase 3 - unlike the HPI and Band D URLs, this one worked first try."""
+    for year in (1995, 1996, 1997):
         url = f"http://prod.publicdata.landregistry.gov.uk.s3-website-eu-west-1.amazonaws.com/pp-{year}.csv"
         dest = DATA_DIR / "price_paid_calibration" / f"pp-{year}.csv"
         _download(url, dest)
+    _download(
+        "https://www.nationwide.co.uk/media/hpi/download/uk-house-price-since-1952",
+        DATA_DIR / "price_paid_calibration" / "UK_house_price_since_1952.xlsx",
+    )
 
 
 def fetch_mhclg_settlement_data() -> None:
