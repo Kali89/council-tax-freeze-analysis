@@ -14,7 +14,7 @@ than hiding them.
 import pytest
 
 from council_tax_freeze.config import DATA_DIR
-from council_tax_freeze.engine.build import HEADLINE_YEARS, build_engine
+from council_tax_freeze.engine.build import HEADLINE_YEARS, build_engine, compute_shared_tier_exposure
 from council_tax_freeze.hpi.build import build_hpi
 from council_tax_freeze.parsers.band_d.parse import build_band_d
 from council_tax_freeze.parsers.ctsop.parse import build_ctsop
@@ -133,3 +133,119 @@ def test_headline_direction_matches_the_thesis(engine_result):
     for variant in ["variant1_gap", "variant2_gap"]:
         assert kc[variant].sum() < 0
         assert hartlepool[variant].sum() > 0
+
+
+# ---------------------------------------------------------------------------
+# Nesting: Variant 1 (compressed multiplier) and Variant 2 (proportional,
+# "Variant 1 with compression removed") are built from ONE shared
+# per-cohort relative value and reallocation mechanism - see engine/build.py
+# module docstring for the full reasoning behind the rewrite. These tests
+# pin the two properties that make that claim checkable, not just asserted.
+# ---------------------------------------------------------------------------
+
+
+def test_compressed_and_proportional_curves_cross_exactly_once_at_band_d():
+    """The mathematical core of 'nested': the compressed-multiplier curve
+    and the proportional line must intersect ONLY at Band D's own midpoint
+    (both are defined to equal 1.0 there) and nowhere else - if they
+    crossed elsewhere, a cohort's sign relative to 'more/less than
+    proportional' would flip more than once across the value range. Direct
+    numeric check, not just visual/spot inspection."""
+    import numpy as np
+
+    from council_tax_freeze.engine.build import _compressed_multiplier, _proportional_multiplier
+
+    values = np.geomspace(5_000, 3_000_000, 500)
+    diff = [_compressed_multiplier(v) - _proportional_multiplier(v) for v in values]
+    sign = np.sign(diff)
+    crossings = (np.diff(sign) != 0).sum()
+    assert crossings == 1
+
+
+@requires_all_data
+def test_v2_minus_v1_gap_correlates_with_high_band_share(engine_result):
+    """The 'compression scales with tail-skew' claim, checked directly:
+    across all 296 LAs, how much MORE negative Variant 2's gap is than
+    Variant 1's (i.e. how much the compression term alone shifts the
+    result) should correlate positively with that LA's share of dwellings
+    in Bands F-H. This is what makes the residual sign disagreements
+    between the two variants (see test below) a real, tail-skew-driven
+    finding rather than unexplained noise."""
+    import numpy as np
+
+    from council_tax_freeze.parsers.ctsop.parse import build_ctsop
+
+    ct = build_ctsop(CTSOP_CONSOLIDATED, CTSOP_2025)
+    ctsop_fy = ct.la_year[ct.la_year["financial_year"] == "2018-19"].set_index("ons_code")
+    fgh_share = (ctsop_fy["band_f"] + ctsop_fy["band_g"] + ctsop_fy["band_h"]) / ctsop_fy["all_properties"]
+
+    fy = engine_result.la_year[engine_result.la_year["financial_year"] == "2018-19"].set_index("ons_code")
+    compression_effect = fy["variant2_gap"] - fy["variant1_gap"]  # more negative = compression pulls liability down more
+
+    joined = compression_effect.to_frame("compression_effect").join(fgh_share.rename("fgh_share")).dropna()
+    corr = np.corrcoef(joined["fgh_share"], joined["compression_effect"])[0, 1]
+    assert corr < -0.5, f"expected a strong negative correlation (more F-H share -> more negative compression effect), got {corr:.2f}"
+
+
+@requires_all_data
+def test_sign_disagreements_are_concentrated_in_tail_skewed_las(engine_result):
+    """Pins the actual investigation finding: LAs where Variant 1 and
+    Variant 2 disagree on sign are not random - they are the tail-skewed
+    commuter-belt LAs where the compression effect is large enough to
+    dominate a small valuation-date-only effect (Elmbridge: 40.4% of
+    stock in Bands F-H vs 9.2% England-wide - checked directly, not
+    assumed, during the investigation this test records)."""
+    from council_tax_freeze.parsers.ctsop.parse import build_ctsop
+
+    ct = build_ctsop(CTSOP_CONSOLIDATED, CTSOP_2025)
+    ctsop_fy = ct.la_year[ct.la_year["financial_year"] == "2018-19"].set_index("ons_code")
+    fgh_share = (ctsop_fy["band_f"] + ctsop_fy["band_g"] + ctsop_fy["band_h"]) / ctsop_fy["all_properties"]
+
+    fy = engine_result.la_year[engine_result.la_year["financial_year"] == "2018-19"].copy()
+    fy["sign_match"] = (fy["variant1_gap"] > 0) == (fy["variant2_gap"] > 0)
+    fy = fy.set_index("ons_code").join(fgh_share.rename("fgh_share"))
+
+    mismatch_mean_fgh = fy.loc[~fy["sign_match"], "fgh_share"].mean()
+    match_mean_fgh = fy.loc[fy["sign_match"], "fgh_share"].mean()
+    assert mismatch_mean_fgh > match_mean_fgh * 1.5, (
+        f"expected sign-disagreement LAs to be markedly more tail-skewed than agreement LAs "
+        f"(mismatch mean F-H share {mismatch_mean_fgh:.1%} vs match mean {match_mean_fgh:.1%})"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Single-pot exposure bound - see config.TIERED_REALLOCATION_IMPLEMENTED and
+# DATA.md "Single-pot reallocation: decision and quantified bound". Not a
+# correction; a documented, per-LA caveat on how exposed a computed gap is.
+# ---------------------------------------------------------------------------
+
+
+@requires_all_data
+def test_westminster_high_exposure_hartlepool_low_exposure():
+    """Pins the finding that motivated reporting this bound at all:
+    Westminster (where the single-pot bias was actually found and
+    demonstrated) has high shared-tier exposure; Hartlepool (unaffected,
+    per the project log) has low exposure - consistent with, though not
+    proof of, the mechanism."""
+    bd = build_band_d(BAND_D_FILE)
+    exposure = compute_shared_tier_exposure(bd.la_year)
+    fy = exposure[exposure["financial_year"] == "2018-19"].set_index("ons_code")
+    assert fy.loc["E09000033", "shared_tier_share"] > 0.35  # Westminster
+    assert fy.loc["E06000001", "shared_tier_share"] < 0.20  # Hartlepool
+
+
+@requires_all_data
+def test_exposure_is_bimodal_by_authority_type():
+    """Unitary/London authorities (own precept absorbs county-equivalent
+    services) cluster low; two-tier shire districts (own precept is a
+    small slice next to the county's) cluster high. Checked directly,
+    not assumed - see engine module docstring."""
+    bd = build_band_d(BAND_D_FILE)
+    exposure = compute_shared_tier_exposure(bd.la_year)
+    fy = exposure[exposure["financial_year"] == "2018-19"]["shared_tier_share"].dropna()
+    low_cluster = ((fy > 0.05) & (fy < 0.30)).sum()
+    high_cluster = ((fy > 0.75) & (fy < 0.95)).sum()
+    middle = ((fy >= 0.30) & (fy <= 0.75)).sum()
+    assert low_cluster > 100
+    assert high_cluster > 150
+    assert middle < 20, f"expected a sparse middle between the two clusters, got {middle} LAs"

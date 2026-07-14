@@ -446,29 +446,117 @@ rate (not an averaged rate) — `engine/build.py` (`_equal_split_fallback`).
 Result: zero unresolved rows across the entire headline period
 (2009-10 to 2025-26, 296 LAs × 17 years = 5,032 rows), confirmed by test.
 
-## Phase 4: the IFS gate
+## Phase 4: the IFS gate, and what it caught
 
 Per the project's own methodology standard: the engine's implied FY2018-19
 LA-level redistribution was checked against IFS (2020)'s own published
 Table 4.1/4.2/4.4 figures for named local authorities **before** the
-cumulative headline series was trusted, and the check was run as a gate —
-fail and stop, not fail and tune. Result: **pass**, with two honestly
-reported discrepancies, neither smoothed over:
+cumulative headline series was trusted, run as a gate — fail and stop, not
+fail and tune. Result: pass on sign (Variant 1: 14/15 named LAs; Variant 2:
+8/8), but sign alone was not treated as sufficient, and that turned out to
+matter.
 
-- **Variant 1 (pure revaluation) vs IFS's Option 1**: 14 of 15 named LAs
-  match sign. The one miss is Bristol (IFS +12%, ours ~0%) — itself one of
-  IFS's smallest listed effects, and exactly the kind of borderline,
-  near-threshold case our coarser "whole cohort moves together" band
-  reassignment (see `engine/build.py` module docstring) would be expected
-  to handle worst, since it can't move part of a band's stock across a
-  threshold the way IFS's property-level data can.
-- **Variant 2 (proportional) vs IFS's Option 5**: 8 of 8 named LAs match
-  sign. Magnitudes are broadly comparable for most (e.g. Hartlepool -64%
-  vs IFS's -61%; Kensington and Chelsea +310% vs IFS's +246%), but
-  Westminster is a notable outlier (+525% vs IFS's +175%, roughly 3x too
-  high) — flagged, not investigated further or tuned away in this pass.
+**Checking magnitudes, not just signs, on the same data found a real,
+systematic error**, not just a discrepancy to note and move past. Both
+Kensington and Chelsea and Westminster's Variant 2 gaps came out 2-3x
+larger than IFS's own published figures — a large miss on real LAs, not an
+edge case, and one a sign-only gate would have missed entirely.
 
-Both variants also correctly show the headline direction: Kensington and
-Chelsea's cumulative gap is negative (paid less than a value-proportional
-counterfactual) and Hartlepool's is positive (paid more), under both
-variants, over the whole headline period — see `tests/test_engine.py`.
+**Investigated, not assumed.** Two candidate causes were ruled out first:
+Westminster's Band D rate (£712.09, 2018-19) was verified directly against
+Westminster's own published council tax guide — correct. Our implied
+average property value for Westminster (£1,253,118) was checked against
+IFS's own independent Table 4.1 estimate (£1,176,000, Q1 2019) — within
+7%, not the source of a 2-3x error. The actual cause: this engine
+reallocates each year's total actual revenue against value share in a
+**single national pot** — literally the brief's own specified formula, and
+the real system does not work that way. Most of a London borough's bill
+(the GLA precept — mayoral, police, fire) is identical across all 33
+boroughs and was never value-proportional; in reality it reallocates
+*within* London, not against the whole of England. Checked directly, not
+via the England average: Westminster's own Band D rate (£712) is uniquely
+low even against its own precepting-group peers (City of London £933,
+Kensington and Chelsea £1,139, Hackney £1,375, Camden £1,489, Lewisham
+£1,498, Richmond upon Thames £1,707) — a genuine, large, LOCAL anomaly
+(business-rate income, historic reserves), which single-pot reallocation
+amplifies against the whole of England rather than confining to its own
+tier. The ratio between an LA's stock-value share and its actual-revenue
+share (what single-pot reallocation uses directly) is 6.25x for
+Westminster, 4.10x for Kensington and Chelsea, 2.28x for Camden — a clean
+gradient tracking exactly how far each borough's own rate diverges from
+its shared-tier peers, confirming the mechanism rather than a
+London-wide effect.
+
+**Nesting was fixed first** (per instruction — a rewrite of existing code,
+not blocked on new data acquisition). The original Variant 1 reassigned
+whole band cohorts to a new discrete band via nationally-rescaled
+thresholds; Variant 2 used a separate, continuous stock-value sum — two
+different approximation methods, checked across all 296 LAs and found to
+disagree on sign for 62 LAs (80% agreement, not the near-100% a properly
+nested pair should show). Rewritten so both variants share one calculation:
+a single relative value per dwelling cohort (`band midpoint × LA HPI
+factor / national HPI factor`), passed through either a smooth compressed-
+multiplier curve (Variant 1, fit exactly through the real system's 8
+band-multiplier points, piecewise-linear in log-value) or a plain
+proportional line (Variant 2 — literally "Variant 1 with the compression
+removed"), both feeding the same reallocation step. Verified: the two
+curves cross exactly once, at Band D's own midpoint (checked numerically
+over a 500-point grid). Verified separately: Variant 2's actual computed
+numbers are unchanged by this rewrite (a mathematical necessity — dividing
+by a common per-year constant doesn't move a share-based reallocation).
+Raw sign-agreement only rose to 244/296, which looked like a non-fix —
+until the remaining 52 disagreements were checked directly and found to be
+a genuine finding, not residual noise: they are concentrated in
+tail-skewed Surrey commuter towns (Elmbridge 40.4% of stock in Bands F-H
+vs 9.2% England-wide), where Variant 1's valuation-date-only effect is
+small but Variant 2's compression effect is large enough to dominate and
+flip the sign — exactly what "V2 = V1 + compression" predicts when the
+compression term dominates. Confirmed with a correlation check (r = -0.69
+between the V2-V1 gap and F-H band share across all 296 LAs). **Variant 1
+is reported as the headline; Variant 2 is reported as a separate,
+secondary finding about compression, concentrated in wealthy commuter
+areas that cut across the North/South axis — never summed or averaged
+with Variant 1.** See `notebooks/02_method.ipynb` "Variant 1 is the
+headline" and `tests/test_engine.py`.
+
+**Tiers were scoped, not built**, and the GLA-only shortcut (fix London,
+leave the rest single-pot) was explicitly considered and rejected: it
+would make the North/South comparison itself a comparison between two
+different calculations, worse than one method applied uniformly.
+Confirmed by checking, not assuming: MHCLG publishes individual
+precept-tier rates (police, fire, county, each with GSS codes) in a clean,
+structured format back to **2011-12** — verified directly, real files, real
+numbers (Avon and Somerset Police: £168.03 in 2011-12, rising to £251.20 by
+2022-23, a plausible trajectory). **2009-10 and 2010-11 are not available
+in that form** — the gov.uk pages for those years return 404 (same
+platform-migration pattern already found for VOA in Phase 3); the only
+likely source is an unstructured, multi-hundred-page DCLG statistical
+digest, a materially larger and different extraction task than anything
+else in this pipeline. Not pursued, per the explicit decision this
+triggered: single-pot reallocation stays for the whole headline period,
+the bias quantified rather than corrected.
+
+**The quantified bound**: `engine.build.compute_shared_tier_exposure`
+computes, per LA per year, `shared_tier_share = 1 - (own district
+precept / area total)`, using Band D data already in the pipeline (no new
+source needed — `own_precept_incl_parish`, from Table 1, is now exposed
+alongside the area total specifically for this purpose). This is
+structurally bimodal, checked directly, not assumed: unitary and London
+authorities cluster at 6-40% (their own precept already absorbs what would
+be county-level services elsewhere; ~120 LAs in this band for FY2018-19),
+ordinary two-tier shire districts cluster at 83-92% (~200+ LAs) — a
+function of England's actual local government structure, North and South
+alike, not a London-specific artefact. Hartlepool, County Durham and
+Blackpool — the Northern LAs this analysis' headline rests on — are all
+unitary authorities in the LOW-exposure band (14-16%), consistent with
+their own rates not diverging sharply from their (small) set of
+shared-tier peers, unlike Westminster's. This is a bound on exposure, not
+proof of the absence of bias, and is reported alongside every gap rather
+than used to silently adjust any of them — see
+`tests/test_engine.py::test_westminster_high_exposure_hartlepool_low_exposure`
+and `test_exposure_is_bimodal_by_authority_type`.
+
+Both variants correctly show the headline direction throughout: Kensington
+and Chelsea's cumulative gap is negative (paid less than a
+value-proportional counterfactual) and Hartlepool's is positive (paid
+more), under both variants, over the whole headline period.

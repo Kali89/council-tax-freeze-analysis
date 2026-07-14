@@ -30,30 +30,70 @@ matching and none exists.
 
 HPI factors are computed only at 2025-vintage LA level (Land Registry's
 own HPI methodology retroactively applies current LA boundaries - see
-hpi/build.py). A predecessor's stock-value calculation therefore uses its
-eventual 2025-successor's HPI trajectory, not a predecessor-specific one -
-the finest geography HPI data actually offers, noted as an approximation,
-not hidden.
+hpi/build.py). A predecessor's revalued-value calculation therefore uses
+its eventual 2025-successor's HPI trajectory, not a predecessor-specific
+one - the finest geography HPI data actually offers, noted as an
+approximation, not hidden.
 
-**Variant 1 (freeze only, keep multipliers)**, unlike Variant 2, needs a
-band REASSIGNMENT, not just a value: which 1991-basis band would a dwelling
-be in if bands were redrawn using year-t values, while keeping the existing
-6/9-18/9 multiplier structure? Property-level data (what IFS used) isn't
-available here, only band-level counts - so a coarse but stated
-approximation is used: every dwelling in a given 1991 band is assumed to
-sit at that band's assumed 1991 midpoint (config.band_midpoints_1991 - the
-same reference value the stock-value calculation already uses); that
-midpoint is inflated by the row's own (2025-target) HPI factor to estimate
-a year-t value; band thresholds are rescaled by the NATIONAL AVERAGE HPI
-factor for that year (not each LA's own factor - the whole point is to
-isolate relative movement); and the dwelling-count cohort is reassigned
-whole to whichever rescaled band its estimated value falls into. This
-means a band's dwellings all move together rather than partially - a
-genuine approximation, stated here rather than left implicit.
+**Variant 1 and Variant 2 are one calculation, not two.** This is a
+rewrite: an earlier version computed Variant 1 by reassigning whole band
+COHORTS to a new discrete band via nationally-rescaled thresholds, and
+Variant 2 separately via a raw stock-value sum - two different
+approximation methods that turned out NOT to nest properly (checked
+across all 296 LAs for FY2018-19: only 80% sign agreement between the two,
+concentrated in mid-value commuter-belt LAs sitting near band-threshold
+edges, where the old Variant 1's whole-cohort discretisation produced
+step-function jumps uncorrelated with Variant 2's continuous calculation).
+
+The fix: for every (LA, band) cohort, compute one RELATIVE value -
+`relative_value = band_midpoint_1991[b] * (hpi_factor_la / hpi_factor_national)`
+- how this cohort's assumed 1991 value has moved relative to the NATIONAL
+AVERAGE since the baseline (not relative to its own LA, which is what
+Variant 2 originally used - see below for why this doesn't change Variant
+2's result). This is then passed through ONE of two liability-multiplier
+functions:
+
+  - Variant 1 (freeze only, keep the existing 6/9-18/9 multiplier
+    structure): `_compressed_multiplier(v)`, a smooth, monotonic function
+    built from the SAME eight (band midpoint, multiplier) control points
+    as the real system, piecewise-linear in log(value), linearly
+    extrapolated beyond Band A and Band H. It exactly reproduces today's
+    multiplier when `relative_value` equals a band's own midpoint (i.e.
+    zero relative movement gives zero change), and varies smoothly
+    in between and beyond - no discrete band reassignment, no
+    whole-cohort jumps.
+  - Variant 2 (freeze + compression, fully proportional to value):
+    `_proportional_multiplier(v) = v / band_D_midpoint_1991` - literally
+    "Variant 1 with the compression removed": the same relative_value,
+    the same reallocation mechanism, a different (linear, uncompressed)
+    multiplier function in place of the compressed one.
+
+Both then feed the SAME reallocation step:
+`cf[i,t] = national_actual_revenue[t] * tax_base[i,t] / sum_j(tax_base[j,t])`
+- literally the same code, run twice with a different multiplier function.
+This is what "V2 = V1 minus compression" means concretely, and it is why a
+future tiered reallocation (district/county/police/fire/GLA reallocated
+separately - see DATA.md "Westminster" finding) only needs to be built
+once, against this shared reallocation step, not twice against two
+divergent calculations.
+
+Using relative-to-national value (rather than each LA's own absolute HPI
+factor) for BOTH variants is deliberate, not just for Variant 1: dividing
+every LA's estimated value by the SAME per-year national factor is a
+common scalar that cancels out in Variant 2's SHARE-based reallocation
+(linear function: m(v/k) = m(v)/k for constant k) - so Variant 2's
+computed gap is numerically IDENTICAL to the old absolute-value version.
+For Variant 1's genuinely nonlinear compressed-multiplier function this
+choice is NOT cosmetic: relative-to-national value is what correctly
+isolates "the effect of the frozen valuation date" (the brief's own
+framing) rather than conflating it with nationwide nominal appreciation,
+and matches IFS's own stated methodology of redrawing band thresholds to
+preserve NATIONAL band-population shares, not each LA's own.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import pandas as pd
@@ -62,7 +102,6 @@ from council_tax_freeze.boundaries.crosswalk import AmbiguousBoundaryChange, Unm
 from council_tax_freeze.boundaries.lad_2025 import LAD_2025_CODES
 from council_tax_freeze.config import (
     BAND_MULTIPLIER,
-    BAND_THRESHOLD_1991,
     COLLECTION_FACTOR,
     ENGLAND_BANDS,
     HEADLINE_FIRST_YEAR,
@@ -87,6 +126,51 @@ def _financial_years(first: str, last: str) -> list[str]:
 
 
 HEADLINE_YEARS = _financial_years(HEADLINE_FIRST_YEAR, LAST_YEAR)
+
+
+def _multiplier_control_points() -> tuple[list[float], list[float]]:
+    """(log(band midpoint), multiplier) control points, sorted ascending -
+    the real system's own eight points, used to build the smooth
+    compressed-multiplier curve. Not re-derived per call."""
+    midpoints = band_midpoints_1991()
+    pairs = sorted((midpoints[b], BAND_MULTIPLIER[b]) for b in BANDS)
+    log_points = [math.log(v) for v, _m in pairs]
+    mult_points = [m for _v, m in pairs]
+    return log_points, mult_points
+
+
+_LOG_POINTS, _MULT_POINTS = _multiplier_control_points()
+_D_MIDPOINT = band_midpoints_1991()["D"]
+
+
+def _compressed_multiplier(value: float) -> float:
+    """Smooth, monotonic interpolation of the real 6/9-18/9 multiplier
+    structure as a continuous function of value - piecewise-linear in
+    log(value) between the eight band-midpoint control points, linearly
+    extrapolated (same slope as the nearest segment) beyond Band A and
+    Band H. See module docstring for why this replaces discrete band
+    reassignment."""
+    if value <= 0:
+        return _MULT_POINTS[0]
+    logv = math.log(value)
+    if logv <= _LOG_POINTS[0]:
+        slope = (_MULT_POINTS[1] - _MULT_POINTS[0]) / (_LOG_POINTS[1] - _LOG_POINTS[0])
+        return _MULT_POINTS[0] + slope * (logv - _LOG_POINTS[0])
+    if logv >= _LOG_POINTS[-1]:
+        slope = (_MULT_POINTS[-1] - _MULT_POINTS[-2]) / (_LOG_POINTS[-1] - _LOG_POINTS[-2])
+        return _MULT_POINTS[-1] + slope * (logv - _LOG_POINTS[-1])
+    for i in range(len(_LOG_POINTS) - 1):
+        if _LOG_POINTS[i] <= logv <= _LOG_POINTS[i + 1]:
+            frac = (logv - _LOG_POINTS[i]) / (_LOG_POINTS[i + 1] - _LOG_POINTS[i])
+            return _MULT_POINTS[i] + frac * (_MULT_POINTS[i + 1] - _MULT_POINTS[i])
+    raise AssertionError("unreachable - log_points must be sorted and cover logv by the checks above")
+
+
+def _proportional_multiplier(value: float) -> float:
+    """Variant 2: 'Variant 1 with the compression removed' - the same
+    relative value, a linear (uncompressed) multiplier in place of
+    `_compressed_multiplier`. See module docstring."""
+    return value / _D_MIDPOINT
 
 
 def _recode_aliases() -> dict[str, str]:
@@ -130,34 +214,6 @@ def _ctsop_lookup(ctsop_la_year: pd.DataFrame, ctsop_predecessor_weights: pd.Dat
     return lookup
 
 
-def _rescaled_thresholds(national_hpi_factor: float) -> dict[str, float]:
-    return {b: t * national_hpi_factor for b, t in BAND_THRESHOLD_1991.items()}
-
-
-def _assign_band(value: float, thresholds: dict[str, float]) -> str:
-    band = "A"
-    for b in BANDS:
-        if value >= thresholds[b]:
-            band = b
-        else:
-            break
-    return band
-
-
-def _reassign_bands(counts: dict[str, float], la_hpi_factor: float, thresholds: dict[str, float], midpoints: dict[str, float]) -> dict[str, float]:
-    """Variant 1's band reassignment - see module docstring for the method
-    and its stated approximation (whole-cohort movement, no within-band
-    dispersion)."""
-    new_counts = {b: 0.0 for b in BANDS}
-    for old_band, count in counts.items():
-        if not count:
-            continue
-        estimated_value = midpoints[old_band] * la_hpi_factor
-        new_band = _assign_band(estimated_value, thresholds)
-        new_counts[new_band] += count
-    return new_counts
-
-
 def _equal_split_fallback() -> dict[str, tuple[str, int]]:
     """predecessor_code -> (immediate merge-successor code, sibling count),
     for the three 2019 merge events whose predecessors have NO row anywhere
@@ -196,8 +252,8 @@ class RowLiability:
     target_code: str
     weight: float
     actual: float
-    stock_value_1991_basis: float  # Variant 2's proportional reallocation base
-    variant1_tax_base: float  # Variant 1's reassigned-band tax base
+    variant1_tax_base: float
+    variant2_tax_base: float
 
 
 def _compute_row_liabilities(
@@ -236,7 +292,6 @@ def _compute_row_liabilities(
         if national_hpi_factor is None:
             unresolved.append({"ons_code": code, "authority": name, "financial_year": fy, "reason": "no national HPI factor"})
             continue
-        thresholds = _rescaled_thresholds(national_hpi_factor)
 
         as_of = f"{fy.split('-')[0]}-04-01"
         try:
@@ -258,10 +313,15 @@ def _compute_row_liabilities(
                 unresolved.append({"ons_code": code, "authority": name, "financial_year": fy, "reason": f"no HPI factor for target {target_code}"})
                 continue
 
-            stock_value = sum((counts[b] or 0) * midpoints[b] for b in BANDS) * hpi_factor
-
-            reassigned = _reassign_bands(counts, hpi_factor, thresholds, midpoints)
-            variant1_tax_base = sum(reassigned[b] * BAND_MULTIPLIER[b] for b in BANDS)
+            v1_base = 0.0
+            v2_base = 0.0
+            for b in BANDS:
+                count = counts[b] or 0
+                if not count:
+                    continue
+                relative_value = midpoints[b] * (hpi_factor / national_hpi_factor)
+                v1_base += count * _compressed_multiplier(relative_value)
+                v2_base += count * _proportional_multiplier(relative_value)
 
             rows.append(
                 RowLiability(
@@ -270,8 +330,8 @@ def _compute_row_liabilities(
                     target_code=target_code,
                     weight=weight,
                     actual=actual * weight,
-                    stock_value_1991_basis=stock_value * weight,
-                    variant1_tax_base=variant1_tax_base * weight,
+                    variant1_tax_base=v1_base * weight,
+                    variant2_tax_base=v2_base * weight,
                 )
             )
 
@@ -300,20 +360,40 @@ def build_engine(
     unresolved_df = pd.DataFrame(unresolved)
 
     row_df = pd.DataFrame([r.__dict__ for r in rows])
-    la_year = row_df.groupby(["target_code", "financial_year"], as_index=False)[
-        ["actual", "stock_value_1991_basis", "variant1_tax_base"]
-    ].sum()
+    la_year = row_df.groupby(["target_code", "financial_year"], as_index=False)[["actual", "variant1_tax_base", "variant2_tax_base"]].sum()
     la_year = la_year.rename(columns={"target_code": "ons_code"})
 
     national = la_year.groupby("financial_year", as_index=False)["actual"].sum().rename(columns={"actual": "national_actual_revenue"})
     la_year = la_year.merge(national, on="financial_year")
 
-    stock_totals = la_year.groupby("financial_year")["stock_value_1991_basis"].transform("sum")
-    la_year["variant2_cf"] = la_year["national_actual_revenue"] * la_year["stock_value_1991_basis"] / stock_totals
-    la_year["variant2_gap"] = la_year["actual"] - la_year["variant2_cf"]
-
-    v1_totals = la_year.groupby("financial_year")["variant1_tax_base"].transform("sum")
-    la_year["variant1_cf"] = la_year["national_actual_revenue"] * la_year["variant1_tax_base"] / v1_totals
-    la_year["variant1_gap"] = la_year["actual"] - la_year["variant1_cf"]
+    for variant in ("variant1", "variant2"):
+        totals = la_year.groupby("financial_year")[f"{variant}_tax_base"].transform("sum")
+        la_year[f"{variant}_cf"] = la_year["national_actual_revenue"] * la_year[f"{variant}_tax_base"] / totals
+        la_year[f"{variant}_gap"] = la_year["actual"] - la_year[f"{variant}_cf"]
 
     return EngineResult(la_year=la_year, national=national, unresolved=unresolved_df)
+
+
+def compute_shared_tier_exposure(band_d_la_year: pd.DataFrame) -> pd.DataFrame:
+    """Per (LA, financial year): what share of the area-total Band D bill is
+    set by tiers OTHER than the billing authority's own (district) precept -
+    county, police, fire, GLA. NOT a correction to the single-pot
+    reallocation (see config.TIERED_REALLOCATION_IMPLEMENTED); this is the
+    documented, quantified BOUND on how exposed a given LA's computed gap is
+    to the single-pot bias found via the Westminster investigation. A high
+    share means a large fraction of the bill flows through tiers that, in
+    reality, do not reallocate against property value the way this engine's
+    single national pot assumes - it does not by itself mean the gap IS
+    biased (that additionally requires the LA's own rate, or its
+    precepting group's rate, to diverge from peers), only that it COULD be.
+
+    Structurally bimodal (checked, not assumed): unitary and London
+    authorities typically show 6-40% (their 'own' precept already absorbs
+    what would be county-level services elsewhere), ordinary two-tier shire
+    districts typically show 83-92% (their own precept is a small slice
+    next to the county's), because that is how English local government is
+    actually structured, not an artefact of this calculation."""
+    df = band_d_la_year[band_d_la_year["financial_year"].isin(HEADLINE_YEARS)].copy()
+    df = df[df["band_d_incl_parish"].notna() & df["own_precept_incl_parish"].notna()]
+    df["shared_tier_share"] = 1 - (df["own_precept_incl_parish"] / df["band_d_incl_parish"])
+    return df[["ons_code", "authority", "financial_year", "shared_tier_share"]]

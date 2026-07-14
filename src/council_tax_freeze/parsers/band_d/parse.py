@@ -179,7 +179,7 @@ def _tidy(df: pd.DataFrame, value_name: str) -> pd.DataFrame:
 
 @dataclass
 class BandDResult:
-    la_year: pd.DataFrame  # ons_code, authority, financial_year, band_d_incl_parish, band_d_excl_parish
+    la_year: pd.DataFrame  # ons_code, authority, financial_year, band_d_incl_parish, band_d_excl_parish, own_precept_incl_parish
     national: pd.DataFrame  # financial_year, published_national_band_d (from the live table's England row)
     validation: pd.DataFrame  # financial_year, live_table_value, independent_anchor, within_tolerance
     coverage: pd.DataFrame  # financial_year, n_la_rows, n_unmapped, n_ambiguous
@@ -230,8 +230,14 @@ def build_band_d(path) -> BandDResult:
     merged["parish_component"] = merged["own_precept_incl_parish"] - merged["own_precept_excl_parish"]
     merged["band_d_excl_parish"] = merged["band_d_incl_parish"] - merged["parish_component"]
 
+    # own_precept_incl_parish (the district/billing-authority's OWN precept,
+    # from Table 1) is kept alongside the area total so downstream code can
+    # compute what share of a dwelling's bill is set by the district's own
+    # tier vs shared tiers (county/police/fire/GLA) - see DATA.md "single-pot
+    # exposure bound". Not used by the engine's actual/counterfactual
+    # liability calculation itself, only for quantifying its own limitation.
     la_year = merged.rename(columns={"ONS Code": "ons_code", "Authority": "authority"})[
-        ["ons_code", "authority", "financial_year", "band_d_incl_parish", "band_d_excl_parish"]
+        ["ons_code", "authority", "financial_year", "band_d_incl_parish", "band_d_excl_parish", "own_precept_incl_parish"]
     ].sort_values(["financial_year", "ons_code"])
 
     validation = _validate_national(national)

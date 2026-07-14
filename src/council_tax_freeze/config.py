@@ -182,3 +182,46 @@ HPI_GEOGRAPHY_GRID = ["la", "region"]
 # revaluation points, as an actual revaluation cycle would.
 # ---------------------------------------------------------------------------
 REVALUATION_FREQUENCY_GRID = ["continuous", 5, 10]
+
+# ---------------------------------------------------------------------------
+# Reallocation method: SINGLE-POT, not tiered. This is a decided, quantified
+# limitation, not an oversight - see DATA.md "Single-pot reallocation:
+# decision and quantified bound" for the full reasoning. In brief: the
+# brief's own formula (and this engine) reallocates each year's TOTAL actual
+# revenue against value share across all 296 LAs in one pot. The real system
+# reallocates separately per precepting tier (district/county/police/fire/
+# GLA), each within its own geography - a genuinely more accurate model,
+# but one that needs precept-tier-level Band D data we do not have for the
+# full headline period. Checked, not assumed: MHCLG publishes individual
+# precept-tier rates (police/fire/county), with GSS codes, in a clean,
+# structured format back to 2011-12 - confirmed directly. 2009-10 and
+# 2010-11 are NOT available in that form; the only likely source is an
+# unstructured, multi-hundred-page DCLG statistical digest, a materially
+# different (and much larger) extraction task than anything else in this
+# pipeline, not pursued.
+#
+# Decision: single-pot for the whole headline period, WITH the bias
+# quantified per LA rather than corrected. The mechanism (confirmed via the
+# Westminster investigation - see project log): single-pot incorrectly
+# reallocates the SHARED-tier portion of a bill (county/police/fire/GLA -
+# which in reality does not vary property-value-proportionally WITHIN its
+# own precepting group) against value share across the whole of England.
+# The resulting bias is largest for LAs whose OWN (district-tier) rate
+# diverges most from its shared-tier peers (Westminster's district rate is
+# £712 in 2018-19 against £933-1,707 for every other London borough sharing
+# the same GLA/police/fire tier) - it is not simply "London is biased,
+# the North is not": Hartlepool, County Durham and Blackpool are UNITARY
+# authorities with LOW exposure on this measure (14-16% of their bill is
+# set by tiers other than their own), consistent with their own rates not
+# diverging sharply from peers. Ordinary two-tier shire DISTRICTS - a large
+# share of England, North and South alike - have HIGH exposure by this same
+# measure (85-90%), though whether that translates into REALISED bias
+# depends on whether their COUNTY (not district) rate diverges from ITS
+# peers, which has not been separately checked.
+#
+# `parsers.band_d.parse.build_band_d` exposes `own_precept_incl_parish`
+# (the district's own precept, from Table 1) alongside the area total for
+# exactly this purpose: `shared_tier_share = 1 - own_precept/area_total` is
+# a per-LA, per-year BOUND on single-pot exposure - not a correction, a
+# documented, quantified caveat to report alongside every gap.
+TIERED_REALLOCATION_IMPLEMENTED = False
