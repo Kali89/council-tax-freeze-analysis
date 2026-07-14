@@ -52,9 +52,12 @@ def test_deflators_show_national_prices_fell_then_rose_across_1995_97():
 def test_band_h_empirical_ratio_exceeds_assumed_ratio_in_high_value_areas():
     """The finding this calibration exists to check: does the assumed
     Band H ratio (1.5x, config.BAND_H_RATIO) understate the true tail in
-    high-value areas, as the conservative-corner framing in
-    notebooks/02_method.ipynb claims? Kensington and Chelsea / Westminster
-    have thick enough samples (thousands of sales) to trust the result."""
+    high-value areas? Kensington and Chelsea / Westminster have thick
+    enough samples (thousands of sales) to trust the result. This ratio
+    finding stands on its own and is unaffected by Phase 5 - what changed
+    is the CONCLUSION drawn from it (this no longer implies the base case
+    is the conservative corner of the plausible range; see DATA.md
+    "Price Paid calibration" and SENSITIVITY_RESULTS.md "Axis 1")."""
     result = run_calibration(PP_FILES, NATIONWIDE_FILE)
     h = result.band_h_summary.set_index("district")
     for district in ["KENSINGTON AND CHELSEA", "CITY OF WESTMINSTER"]:

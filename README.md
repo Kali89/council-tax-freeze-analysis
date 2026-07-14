@@ -44,10 +44,11 @@ by central government." That is our mechanism, stated in print in 2020.
 
 **Breach (2024), Centre for Cities, "Towards fiscal devolution"** (in
 *Devolution Solution*) independently models revaluation plus additional
-bands, hits the same open-band imputation problem this repo solves in
-`config.py`, and — like us — deliberately chose conservative values for the
-top and bottom bands rather than a best guess (cited as precedent in
-DATA.md). It also argues revaluation without fiscal devolution risks
+bands and hits the same open-band imputation problem this repo solves in
+`config.py` (cited as precedent for treating the open bands as something
+to calibrate against real evidence rather than an unconstrained guess —
+see DATA.md and SENSITIVITY_RESULTS.md for how our own choice was
+checked). It also argues revaluation without fiscal devolution risks
 delivering little fairness gain for large political cost.
 
 **What this repo adds:** both of the above are snapshot counterfactuals —
@@ -93,10 +94,14 @@ and some -£Y per dwelling in low-appreciation areas.
 - **Band-midpoint reconstruction is an approximation.** We do not observe
   1991 property values, only 1991 bands, several of which are open-ended
   (Band A below £40k, Band H above £320k with no upper bound). Midpoint
-  imputation introduces error that is not random across regions — see
-  `notebooks/02_method.ipynb` for why the chosen imputation is a
-  *conservative* corner of the plausible range, and the sensitivity grid
-  that demonstrates it.
+  imputation introduces error that is not random across regions. The
+  headline figure is a **central estimate with an empirically-anchored
+  range of roughly £206-232 per dwelling per year** for the North East
+  (Price Paid calibration corners run through the actual model, not a
+  demonstrated floor — an earlier belief that the base case sat at the
+  conservative end of this range turned out to be wrong once the
+  sensitivity sweep was run, and is corrected, not hidden, in
+  `notebooks/02_method.ipynb` and SENSITIVITY_RESULTS.md).
 - **The 1991-1995 HPI gap is real and unbridged.** Local-authority-level UK
   HPI data starts in January 1995, not April 1991. This analysis measures
   divergence in relative property values since January 1995, not April

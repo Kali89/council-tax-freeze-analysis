@@ -378,19 +378,41 @@ Result: `src/council_tax_freeze/calibration/price_paid.py`,
 
 The two high-value areas have thick samples (thousands of sales) and both
 show the true empirical Band H tail running well above the assumed 1.5x
-ratio — the assumption **understates** high-value stock, consistent with,
-and now empirically supporting rather than just theoretically asserting,
-the "conservative corner" framing already in `config.py` and
-`02_method.ipynb`. The two low-value areas' Band A ratios sit at or below
-the assumed 0.75x (Easington notably below, at 0.64x) — poorer
-predecessor districts' true low-value stock is likely *even poorer* than
-assumed, which independently reinforces the same conservative-corner
-conclusion via the opposite tail. Both effects point the same direction:
-the assumed ratios make the measured North/South gap smaller than a more
-empirically-grounded set would, not larger. Blackpool and Easington's own
-Band H figures are quoted for completeness but are statistically
-worthless (1 and 3 sales) — exactly what you'd expect in areas with almost
-no genuinely high-value 1990s stock, not a data error.
+ratio; the two low-value areas' Band A ratios sit at or below the assumed
+0.75x (Easington notably below, at 0.64x). These four numbers are real and
+unaffected by anything below — the calibration measures where the true
+tails sit, independent of how the model responds to the parameter.
+
+**What is affected: the conclusion this repo drew from them.** Through
+Phase 4, both findings were read as pointing the same direction — "the
+assumed ratios make the measured gap smaller than a more
+empirically-grounded set would, not larger" — i.e. that 0.75/1.5 sat at
+the conservative corner of the plausible range. **Phase 5's sensitivity
+sweep found that reasoning was wrong** (see SENSITIVITY_RESULTS.md "Axis
+1"): the liability curve (`engine.build._compressed_multiplier`) is
+rebuilt from these same two ratios every time it's evaluated, so a higher
+`BAND_A_RATIO` moves both the assumed value *and* the curve's own shape,
+and the curve effect dominates — measured directly, the North East
+headline metric *increases* with `BAND_A_RATIO` and *decreases* (weakly)
+with `BAND_H_RATIO`, the opposite of what was assumed when this section
+was first written.
+
+Run through the actual engine at the two empirical corners these four
+numbers define (not interpolated): `band_a_ratio=0.64, band_h_ratio=2.06`
+(Easington + Kensington and Chelsea) gives a North East headline of
+**£205.79/dwelling/year**; the opposite corner, `band_a_ratio=0.77,
+band_h_ratio=1.78` (Blackpool + Westminster), gives **£232.30**. The base
+case (0.75, 1.5) gives £227.63 — inside this range, but near its *top*
+(82% of the way from £205.79 to £232.30), not its floor. **The Price Paid
+calibration still constrains the plausible range of true midpoint values —
+that part is unaffected. It no longer supports the claim that the base
+case sits at the conservative end of that range.** The honest
+characterisation is a central estimate (£227.63) with an
+empirically-anchored band of roughly £206-232, not a demonstrated lower
+bound. Blackpool and Easington's own Band H figures (2.66x, 1.06x) are
+quoted for completeness but are statistically worthless (3 and 1 sales) —
+exactly what you'd expect in areas with almost no genuinely high-value
+1990s stock, not a data error.
 
 **Settlement data (#7).** The naming and structure of this series changes
 more than council tax data does — Revenue Support Grant (pre-2013-ish),

@@ -96,25 +96,40 @@ BAND_THRESHOLD_1991 = {
 # assumed typical value of £30k; Band H = 1.5x its lower threshold (£320k),
 # i.e. an assumed typical value of £480k.
 #
-# This is deliberately the CONSERVATIVE corner of the plausible range, not a
-# best guess: Band H's true tail is fattest in the South (where Band H is a
-# large share of stock and includes very high-value property), so
-# understating it understates Southern 1991 stock value and therefore
-# understates the counterfactual gap. The mirror argument applies to Band A
-# in the North. See notebooks/02_method.ipynb for the 12-combination
-# sensitivity grid (BAND_H_RATIO_GRID x BAND_A_RATIO_GRID below) that
-# demonstrates the headline gap's sign is robust across this whole range.
+# NOT the conservative corner of the plausible range - that was the Phase 5
+# pre-sweep belief, and it was wrong, corrected here rather than left as a
+# stale comment (see SENSITIVITY_RESULTS.md "Axis 1" for the full account).
+# The wrong reasoning: treating the liability curve
+# (engine.build._compressed_multiplier) as fixed and asking only how a
+# changed midpoint moves the value fed into it. It isn't fixed - the curve
+# is REBUILT from these same two ratios every time (it is defined to pass
+# through each band's real statutory multiplier at that band's own
+# midpoint), so sweeping BAND_A_RATIO/BAND_H_RATIO moves both the assumed
+# value AND the curve's own shape, and the curve effect dominates. Measured,
+# not argued: the North East headline metric INCREASES with BAND_A_RATIO
+# and (weakly) DECREASES with BAND_H_RATIO - both opposite the pre-sweep
+# prediction.
 #
-# CHECKED, not just argued: src/council_tax_freeze/calibration/price_paid.py
-# deflates 1995-97 Price Paid sales to April-1991-equivalent values in four
-# LAs. Kensington and Chelsea / Westminster (thousands of sales each) show
-# a true empirical Band H tail at 2.06x / 1.78x - both ABOVE the assumed
-# 1.5x, confirming the assumption understates high-value stock. Blackpool /
-# Easington show Band A tails at 0.77x / 0.64x - AT OR BELOW the assumed
-# 0.75x, confirming the mirror argument independently. See DATA.md for the
-# full table and sample sizes (some cells are 1-3 sales and not to be
-# trusted; the two findings above are load-bearing, at thousands of sales
-# each).
+# What this means for the two CHECKED (not just argued) Price Paid
+# calibration corners - src/council_tax_freeze/calibration/price_paid.py,
+# thousands of sales each, load-bearing: Easington's empirical Band A ratio
+# (0.64) and Blackpool's (0.77) bracket the assumed 0.75; Westminster's
+# empirical Band H ratio (1.78) and Kensington and Chelsea's (2.06) both
+# exceed the assumed 1.5. Run through the actual engine (not interpolated):
+# the empirically-anchored corner (band_a_ratio=0.64, band_h_ratio=2.06)
+# gives a North East headline of ~£205.79/dwelling/year; the opposite
+# empirical corner (0.77, 1.78) gives ~£232.30. The base case (0.75, 1.5)
+# gives £227.63 - INSIDE that range, but near its top (82% of the way from
+# £205.79 to £232.30), not at its floor. **The base case is a central
+# estimate with an empirically-anchored range of roughly £206-232, not a
+# demonstrated lower bound.** Report it as such - "at least £X" is no
+# longer a claim this pipeline is entitled to make from these two
+# parameters alone.
+#
+# See notebooks/02_method.ipynb "Sensitivity" and SENSITIVITY_RESULTS.md for
+# the full 12-cell grid, the sign/floor/ceiling thresholds it still passes
+# (pre-registered in SENSITIVITY_PREREGISTRATION.md before any of this was
+# run), and the other three swept axes.
 # ---------------------------------------------------------------------------
 BAND_A_RATIO = 0.75
 BAND_H_RATIO = 1.5

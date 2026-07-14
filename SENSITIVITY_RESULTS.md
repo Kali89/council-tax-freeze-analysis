@@ -70,19 +70,47 @@ interaction wasn't in the pre-registered mechanical reasoning, and it
 should have been — this is a modelling subtlety worth being explicit
 about, not a footnote.
 
-**Consequence for the "conservative corner" language.** The correction
-already flagged in the pre-registration (that 0.75 sits in the *middle*
-of its own grid, not the extreme) stands. But the specific claim I made
-about which direction is more conservative was built on the same wrong
-mechanical reasoning and is therefore also wrong: raising `BAND_A_RATIO`
-toward 0.9 does not shrink the reported effect, it **grows** it (286.46
-vs base's 227.63). So 0.75 is not "less conservative than the true
-extreme (0.9)" as I wrote before running the sweep — if anything, 0.9
-would have produced a *larger* headline claim, and 0.75 sits closer to
-the smaller (0.6-side) end of the axis's actual effect range than my
-pre-registered note implied. `config.py`'s "conservative corner" comment
-needs revising to reflect the *measured* direction, not the predicted
-one — tracked as a follow-up, not done silently as part of this report.
+**Resolved directly, jointly, not axis-by-axis: is the base case still a
+floor on the North/South gap?** The correction already flagged above
+(that 0.75 sits in the *middle* of its own grid, not the extreme) stands,
+but the deeper question is whether 0.75/1.5 still sits at or below the
+minimum of the *plausible* parameter region — not the swept grid's
+arbitrary endpoints (0.6/0.9, 1.25/3.0), but the region the Price Paid
+calibration actually supports. That calibration has two trusted corners
+(thousands of sales each, not the 1-3-sale Blackpool-H/Easington-H
+figures): Easington (0.64) and Blackpool (0.77) for Band A; Westminster
+(1.78) and Kensington and Chelsea (2.06) for Band H. Run through the
+actual engine at all four corners of that empirical box — not
+interpolated from the swept grid, computed directly:
+
+| band_a_ratio | band_h_ratio | source | North East £/dwelling/year |
+|---|---|---|---|
+| 0.64 | 1.78 | Easington, Westminster | 206.07 |
+| 0.64 | 2.06 | Easington, Kensington and Chelsea | **205.79** |
+| 0.77 | 1.78 | Blackpool, Westminster | **232.30** |
+| 0.77 | 2.06 | Blackpool, Kensington and Chelsea | 232.03 |
+
+Since North East is monotonically increasing in `BAND_A_RATIO` and
+(weakly) decreasing in `BAND_H_RATIO`, the box's true minimum is at
+(0.64, 2.06) = £205.79 and its true maximum at (0.77, 1.78) = £232.30 —
+both computed directly, not assumed from the corners' individual axis
+behaviour. **The base case (£227.63) sits inside this range, but 82% of
+the way from floor to ceiling — near the top, not the bottom.**
+
+**We lose the floor framing.** The claim that has been carried since the
+Price Paid calibration section was written — "our midpoint choices
+understate the gap, so the reported figure is a floor" — depended
+entirely on the predicted direction, which measured backwards. The Price
+Paid calibration itself is unaffected: it is empirical evidence about
+where the true Band A/H tails sit, independent of how the model responds
+to the parameter, and it still constrains the plausible range to roughly
+£206-232/dwelling/year for the North East. What it no longer supports is
+that our specific choice sits at that range's conservative edge. **The
+finding this pipeline is entitled to report is a central estimate
+(£227.63/dwelling/year) with an empirically-anchored range of
+£206-232, not "at least £206."** `config.py`, DATA.md, README.md and
+`notebooks/02_method.ipynb` have all been corrected in this same commit —
+not deferred, per the instruction this section responds to.
 
 ## Axis 2: collection factor — exact algebraic identity confirmed, as predicted
 
@@ -114,15 +142,12 @@ precisely because I predicted the opposite.** The pre-registered
 qualitative expectation was that region-level HPI would *meaningfully
 dampen* London specifically, on the reasoning that Westminster/Kensington
 and Chelsea plausibly diverge a lot from the London regional average. The
-actual movement is close to a null result for both regions. Read
-literally, this says LA-level HPI granularity is not doing much
-independent work in this pipeline — the North East and London *regional*
-trends are close enough to their constituent LAs' own trends that
-swapping one for the other barely moves the headline metric. That is
-itself informative (the finding is not an artefact of using fine-grained
-HPI data), but it means my stated reason for expecting a bigger London
-effect specifically was wrong, and should not be repeated in the
-write-up as if confirmed.
+actual movement (+0.5% / +0.9%) is a near-null result for both regions.
+**A <1% movement does not confirm that prediction — it shows something
+weaker and different: that the finding is not an artefact of using
+LA-level HPI granularity.** That is a real, useful robustness result, but
+it is not the result predicted, and the write-up says the weaker thing
+rather than letting a null quietly get promoted to a confirmation.
 
 ## Axis 4: revaluation frequency — matched the prediction exactly, the one axis that did
 
@@ -142,20 +167,38 @@ is worth noting alongside the two axes where they didn't — matching a
 prediction is not more "correct" just because it was predicted; it's
 reported the same way, checked the same way.
 
-## What moved more than expected, stated directly (per the instruction this responds to)
+## What actually matters here, stated directly
 
-Nothing crossed a failure threshold. Two things moved by more than the
-pre-registered reasoning anticipated, in opposite directions:
+Not "nothing crossed a threshold" — that is the least interesting result
+this sweep could have produced, and the easiest to get by accident. Two
+things matter more:
 
-- **The midpoint grid's direction was flipped**, not just "more than
-  expected" — a genuine miss in the mechanical model, corrected above.
-  The numeric thresholds (which didn't depend on getting the direction
-  right, only on bounding the actual min/max) still hold.
-- **The HPI-geography axis moved far less than expected** — a near-null
-  result where a real, if modest, effect was anticipated.
+1. **The midpoint grid's predicted direction was backwards on both
+   ratios**, and that is a real finding about the model, not a rounding
+   error. It broke the framing this whole project has leaned on since
+   the Price Paid calibration was first run: that our midpoint choices
+   are conservative and the reported gap is therefore a floor. Resolved
+   jointly above, computed directly rather than assumed: **the base case
+   is not at or below the minimum of the empirically-plausible parameter
+   region — it sits at 82% of the way to that region's ceiling.** The
+   claim this pipeline is entitled to make changes from "at least
+   £206/dwelling/year" to "a central estimate of £227.63/dwelling/year,
+   with an empirically-anchored range of roughly £206-232." That
+   correction has been made everywhere the old claim appeared
+   (`config.py`, DATA.md, README.md, `notebooks/02_method.ipynb`), not
+   left as a follow-up.
+2. **The HPI-geography axis produced a near-null result (<1% movement),
+   which is a weaker and different finding than the meaningful
+   London-specific dampening that was predicted.** It shows the headline
+   is not an artefact of LA-level HPI granularity — real, worth keeping —
+   but it does not confirm the predicted mechanism, and is not written up
+   as if it does.
 
 Both are reported as findings, not smoothed into "robustness confirmed."
-The overall conclusion — the headline North East effect survives every
-swept axis, with the largest observed movement (16.3%, 10-year
-revaluation) still leaving the finding at 84% of its base-case size — is
-real and was not fitted to arrive at that answer after the fact.
+Separately, and now correctly subordinate to the above: no sign flip
+anywhere, worst midpoint-grid cell still £199.73/dwelling/year, and the
+largest observed movement anywhere in the whole sweep (16.3%, 10-year
+revaluation) still leaves the finding at 84% of its base-case size. That
+the finding survives every swept axis is real and was not fitted to
+arrive at that answer after the fact — it is simply not the headline of
+this document.
