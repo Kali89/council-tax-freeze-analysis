@@ -51,22 +51,30 @@ def fetch_uk_hpi() -> None:
 
 
 def fetch_ons_lad_boundaries() -> None:
-    """ONS LAD (May 2025) boundaries, via the Open Geography Portal API."""
+    """ONS LAD (2025) boundary GEOMETRY, for Phase 7 choropleths - names/codes are already committed, see below."""
     raise ManualDownloadRequired(
-        "ONS LAD boundaries (May 2025):\n"
+        "ONS LAD boundary GEOMETRY (for choropleth maps, Phase 7):\n"
         "  https://geoportal.statistics.gov.uk/ -> search 'Local Authority Districts May 2025 UK BGC'\n"
         "  Download as GeoJSON, save to data/boundaries/lad_2025.geojson\n"
-        "  (Phase 1 will pin the exact ONS API query once the harmonisation module is built.)"
+        "  NOTE: the 296 LA CODES AND NAMES (no geometry) needed for boundary harmonisation\n"
+        "  are already committed at src/council_tax_freeze/boundaries/lad_2025.py - fetched\n"
+        "  via the ArcGIS FeatureServer directly (item 5779a9578f0e48ccacef6af41546b56b), see\n"
+        "  DATA.md. This function is only for the polygon geometry Phase 7 needs to draw maps."
     )
 
 
 def fetch_ons_lad_lookups() -> None:
-    """ONS historic LAD change lookups, chained across the 2009/2019/2020/2023 reorg waves."""
+    """Historic LAD reorg events: RESOLVED, not a manual download - see note below."""
     raise ManualDownloadRequired(
-        "ONS historic LAD change lookups (Phase 1 will pin exact vintages):\n"
-        "  https://geoportal.statistics.gov.uk/ -> search 'LAD changes' or 'Local Authority District to Region'\n"
-        "  Need lookups spanning: pre-2009, 2009 unitary reorg, 2019, 2020, 2023.\n"
-        "  Save each to data/boundaries/lookups/<vintage>.csv"
+        "Historic LAD reorg/change lookups are NOT a manual-download gap any more.\n"
+        "  All five reorg waves (2009, 2019, 2020, 2021, 2023) plus the 2025 Barnsley/\n"
+        "  Sheffield boundary change are hand-encoded and cited in\n"
+        "  src/council_tax_freeze/boundaries/reorg_events.py, with every GSS code (predecessor\n"
+        "  and successor) verified against the ONS Code History Database (July 2024) or a\n"
+        "  maintained names-and-codes reference - see DATA.md 'Boundary harmonisation'.\n"
+        "  This function is kept as a placeholder in case Phase 2's real MHCLG/CTSOP files\n"
+        "  turn up an LA identity reorg_events.py doesn't yet cover; if that happens, add it\n"
+        "  there with a citation, following the existing pattern - don't patch around it here."
     )
 
 

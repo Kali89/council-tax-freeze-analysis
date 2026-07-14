@@ -118,13 +118,33 @@ inventing a proportional split with no basis. This is encoded as a `SPLIT`
 event, which the module's own validation refuses to construct without a
 cited `Apportionment` — see `tests/test_boundaries.py`.
 
-New (successor) GSS codes for every event above are individually verified
-against ONS or a maintained names-and-codes reference. Predecessor codes for
-the 2009 wave specifically (e.g. Cornwall's six former districts) are
-**not** verified against an authoritative source — the reference used only
-covers abolitions from 2015 onward — and are stored name-only pending Phase
-2, when the real historic MHCLG/CTSOP files will show what codes (or names)
-those releases actually used.
+Every GSS code in every event — predecessor and successor alike, all 22
+events — is now verified against an authoritative source: successors
+against ONS or a maintained names-and-codes reference, and the 2009-wave
+predecessors (Cornwall's six former districts, Durham's seven, etc.) — the
+gap flagged after Phase 1 as higher-risk than "should resolve itself
+naturally," since 2000-2009 is a third of the whole study window and the
+affected areas are disproportionately rural, low-appreciation ones the
+headline result depends on — against the **ONS Code History Database (CHD),
+July 2024 release**, `ChangeHistory.csv` (all terminated 31/03/2009, "GSS
+re-coding strategy", correct county PARENTCD for each). Downloaded directly
+from ONS's ArcGIS Hub (item `d7be63c8bd144ae0a26c6593eb5e00b7`), since the
+Hub dataset page itself is JS-rendered and exposes no static link. The
+current 296 English LA codes and names (`src/council_tax_freeze/boundaries/lad_2025.py`)
+are committed too, for the same reason `reorg_events.py` is committed
+rather than downloaded: tests need ground truth to check resolutions
+against without a full raw-data download first.
+
+Cross-checking every 2000-01–2025-26 financial year's reconstructed LA
+identity set against this ground truth (`tests/test_boundaries.py::test_full_2000_2025_coverage`)
+caught one further real gap: Sheffield's own pre-2025 code (E08000019) was
+never listed as a predecessor anywhere, since the Barnsley/Sheffield SPLIT
+event only accounted for Barnsley's side of the 2025 boundary change. Fixed
+by adding `SHEFFIELD_RECODE_2025`. The per-year counts this test reports
+(354 in 2000-01, falling in exact lockstep with each wave's district count,
+to 296 from 2023-24 onward) match the known number of predecessor districts
+in every wave exactly - a genuine cross-check, not just "no exception was
+raised."
 
 **Price Paid calibration slice (#6).** Used only to sanity-check the
 Band A/H midpoint imputation ratios (see `notebooks/02_method.ipynb`) in a

@@ -11,6 +11,9 @@ retrofitted to whatever the code happens to produce:
   5. Harmonised national totals match published figures - deferred until
      Phase 2 real CTSOP data exists; skipped with a clear reason, not
      invented now to match placeholder code.
+  6. Every LA identity valid at any point in 2000-01 to 2025-26 resolves to
+     exactly one 2025 successor, zero unmapped, zero ambiguous, reported
+     per financial year - see test_full_2000_2025_coverage below.
 """
 
 import pytest
@@ -22,7 +25,9 @@ from council_tax_freeze.boundaries.crosswalk import (
     harmonise,
     resolve,
 )
+from council_tax_freeze.boundaries.lad_2025 import LAD_2025_CODES
 from council_tax_freeze.boundaries.reorg_events import (
+    EVENTS,
     Apportionment,
     ChangeType,
     LAUnit,
@@ -201,6 +206,98 @@ def test_ambiguous_matching_events_raise():
     )
     with pytest.raises(AmbiguousBoundaryChange):
         resolve(None, "Fakeshire", "2005-01-01", events=conflicting)
+
+
+# ---------------------------------------------------------------------------
+# 6. Full 2000-01 to 2025-26 coverage, reported per financial year.
+#
+# We don't have real MHCLG/CTSOP files yet (that's Phase 2), so this doesn't
+# check real per-vintage LA lists - it checks the structural universe the
+# crosswalk is responsible for getting right, independent of which dataset
+# later references it: reconstruct, for each financial year, every LA
+# identity that must have existed at that date (by reversing EVENTS
+# backwards from the 2025 target set), and confirm every single one resolves
+# cleanly to a real 2025 code with weight 1.0, zero unmapped, zero ambiguous.
+# This is what actually caught the Sheffield gap below (see reorg_events.py
+# SHEFFIELD_RECODE_2025) - Sheffield's pre-2025 code was never listed as a
+# predecessor anywhere, so it would have silently resolved to itself, a code
+# absent from lad_2025.py, and only been caught here.
+# ---------------------------------------------------------------------------
+
+FINANCIAL_YEAR_STARTS = [f"{y}-04-01" for y in range(2000, 2026)]  # 2000-01 .. 2025-26
+
+
+def _active_units_as_of(as_of_date: str, events=EVENTS) -> set[tuple[str | None, str]]:
+    """Reconstruct the (code, name) LA identities valid at as_of_date by
+    reversing every event with effective_date > as_of_date: successor ->
+    its predecessor(s). Processed latest-date-first, and events sharing the
+    same effective_date are reversed together against a single snapshot of
+    `active` rather than one at a time - otherwise the second of two events
+    that both reference the same successor (Sheffield 2025: BOTH the
+    Barnsley/Sheffield SPLIT and Sheffield's own RECODE list Sheffield's new
+    code in `news`) finds nothing left to reverse, since the first event
+    already removed it. This bug was caught by this test's own count-shape
+    assertion, not inferred in advance."""
+    from council_tax_freeze.boundaries.lad_2025 import LAD_2025
+
+    active: set[tuple[str | None, str]] = {(code, name) for code, name in LAD_2025.items()}
+    events_by_date: dict[str, list[ReorgEvent]] = {}
+    for e in events:
+        if e.effective_date > as_of_date:
+            events_by_date.setdefault(e.effective_date, []).append(e)
+
+    for date in sorted(events_by_date, reverse=True):
+        to_remove: set[tuple[str | None, str]] = set()
+        to_add: set[tuple[str | None, str]] = set()
+        for event in events_by_date[date]:
+            new_keys = {(n.code, n.name) for n in event.news}
+            if new_keys & active:
+                to_remove |= new_keys
+                to_add |= {(o.code, o.name) for o in event.olds}
+        active = (active - to_remove) | to_add
+    return active
+
+
+def test_full_2000_2025_coverage():
+    year_totals_stub = {"Barnsley": 1_000_000}  # only the one fixed_transfer SPLIT needs this
+    coverage_by_year: dict[str, int] = {}
+    unmapped: list[tuple] = []
+    ambiguous: list[tuple] = []
+
+    for as_of in FINANCIAL_YEAR_STARTS:
+        active = _active_units_as_of(as_of)
+        coverage_by_year[as_of] = len(active)
+        for code, name in active:
+            try:
+                results = resolve(code, name, as_of, year_totals=year_totals_stub)
+            except AmbiguousBoundaryChange:
+                ambiguous.append((as_of, code, name))
+                continue
+            except UnmappedLocalAuthorityCode as e:
+                unmapped.append((as_of, code, name, str(e)))
+                continue
+            total_weight = sum(w for _, _, w in results)
+            assert total_weight == pytest.approx(1.0, abs=1e-9), (as_of, code, name, results)
+            for target_code, target_name, _weight in results:
+                if target_code not in LAD_2025_CODES:
+                    unmapped.append((as_of, code, name, f"resolved to {target_name} ({target_code}), not a 2025 LA"))
+
+    print("\nPer-vintage LA identity coverage, 2000-01 to 2025-26:")
+    for as_of, count in coverage_by_year.items():
+        print(f"  {as_of}: {count} active LA identities")
+
+    assert not unmapped, f"{len(unmapped)} unmapped resolution(s), e.g. {unmapped[:5]}"
+    assert not ambiguous, f"{len(ambiguous)} ambiguous resolution(s), e.g. {ambiguous[:5]}"
+
+    # Sanity check the shape of the series: mergers only ever reduce the
+    # count of distinct identities (2009/2019/2020/2021/2023), and the one
+    # SPLIT (2025) doesn't change the count (1 old <-> 2 new via the SPLIT,
+    # but Sheffield's own RECODE means the net identity count is unchanged
+    # across that transition too) - so coverage must be non-increasing.
+    counts = list(coverage_by_year.values())
+    assert counts == sorted(counts, reverse=True), f"coverage should be non-increasing over time: {coverage_by_year}"
+    assert counts[0] > counts[-1], "expected strictly more LA identities in 2000-01 than in 2025-26"
+    assert counts[-1] == 296, f"2025-26 should show exactly the 296 current LAs, got {counts[-1]}"
 
 
 # ---------------------------------------------------------------------------

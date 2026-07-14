@@ -11,20 +11,18 @@ of events (verified individually below against Wikipedia / legislation.gov.uk
 makes them more reliably correct as reviewed data than as the output of code
 parsing N heterogeneous vintage files whose schemas we haven't all seen yet.
 
-GSS code coverage: every NEW (successor) code below is verified against
-either ONS's own site or a maintained names-and-codes reference (see each
-event's `source`). Several OLD (predecessor) codes for the 2009 wave are
-NOT verified - the reference dataset used for verification only covers
-abolitions from 2015 onward, so we could not confirm the exact pre-2009
-district GSS codes (e.g. Cornwall's six predecessor districts) against an
-authoritative source. Those units are stored as name-only (code=None) with
-a TODO. This is deliberate: guessing a plausible-looking E07 code would be
-worse than leaving it unresolved, since the crosswalk would then silently
-join on a wrong code instead of falling back to name matching or failing
-loudly. Phase 2 should fill these in once the actual historic MHCLG/CTSOP
-source files are on disk and we can see what codes (or names) they used for
-that era - which is the only way to know for certain what needs to join
-against what.
+GSS code coverage: every unit below - predecessor and successor alike - now
+carries a verified GSS code. The 2009-wave predecessor districts (Cornwall's
+six, Durham's seven, etc.) were originally left name-only pending
+verification; the ONS Code History Database (CHD), July 2024 release,
+`ChangeHistory.csv`, resolves every one of them (all terminated 31/03/2009,
+"GSS re-coding strategy", ENTITYCD=E07, correct PARENTCD for each county) -
+see each 2009-wave event's `source` field for the exact table/row basis.
+Downloaded from ONS's ArcGIS Hub item d7be63c8bd144ae0a26c6593eb5e00b7
+(`https://www.arcgis.com/sharing/rest/content/items/d7be63c8bd144ae0a26c6593eb5e00b7/data`,
+since the Hub dataset page itself is JS-rendered and doesn't expose a
+static download link). This is the authoritative source specified in the
+Phase 1 code-resolution acceptance criteria, not a fuzzy name match.
 """
 
 from __future__ import annotations
@@ -148,20 +146,35 @@ BARNSLEY_SHEFFIELD_2025 = ReorgEvent(
     ),
 )
 
-# Note: we deliberately do NOT also register a plain RECODE for
-# E08000016->E08000038 / E08000019->E08000039 alongside the SPLIT above.
-# They cover the same (code, effective_date) pair, and registering both
-# would create a genuine ambiguity - which is exactly the kind of case the
-# crosswalk builder must raise on, not silently resolve by picking one. The
-# SPLIT is the more accurate single source of truth for this transition; a
-# vintage that only needs the code relabel gets a weight of ~1.0 to Barnsley
-# and ~0.0 to Sheffield anyway once real dwelling totals are applied.
+# Sheffield's OWN pre-2025 code (E08000019, a different code from Barnsley's,
+# so this does NOT create the ambiguity discussed above) must also resolve
+# forward, or every pre-2025 Sheffield row in the source data would dead-end
+# at a code absent from lad_2025.py. Sheffield's own territory and dwelling
+# stock carry over in full (weight 1.0) to its new code; the 12 dwellings
+# gained from Barnsley are accounted for separately, by the SPLIT above.
+SHEFFIELD_RECODE_2025 = ReorgEvent(
+    event_id="sheffield_recode_2025",
+    effective_date="2025-04-01",
+    change_type=ChangeType.RECODE,
+    olds=(LAUnit("Sheffield", "E08000019"),),
+    news=(LAUnit("Sheffield", "E08000039"),),
+    source="Companion code change to the Barnsley and Sheffield (Boundary Change) Order 2024 (ONS explore-local-statistics E08000039).",
+)
+
+# We deliberately do NOT also register a plain RECODE for
+# E08000016->E08000038 (Barnsley's own old code) alongside the SPLIT above -
+# that WOULD create a genuine ambiguity (two events both listing E08000016 as
+# an old unit), which is exactly the kind of case the crosswalk builder must
+# raise on, not silently resolve by picking one. The SPLIT is the single
+# source of truth for Barnsley's old code; SHEFFIELD_RECODE_2025 above is a
+# distinct old code (E08000019) and doesn't collide with it.
 
 # ---------------------------------------------------------------------------
-# 2009-04-01: seven non-metropolitan counties reformed. Verified against
-# Wikipedia's "2009 structural changes to local government in England" and,
-# for new-unit codes only, cross-checked against a maintained GSS names-and-
-# codes reference. Every one of these is a clean whole-district regrouping -
+# 2009-04-01: seven non-metropolitan counties reformed. Successor names/dates
+# verified against Wikipedia's "2009 structural changes to local government
+# in England"; every code, predecessor and successor, verified against a GSS
+# names-and-codes reference or the ONS Code History Database (see each
+# event's `source`). Every one of these is a clean whole-district regrouping -
 # no predecessor district's territory was split between two successors.
 # ---------------------------------------------------------------------------
 REORG_2009 = (
@@ -169,80 +182,142 @@ REORG_2009 = (
         event_id="cornwall_2009",
         effective_date="2009-04-01",
         change_type=ChangeType.MERGE,
-        olds=tuple(LAUnit(n) for n in ["Penwith", "Kerrier", "Carrick", "Restormel", "Caradon", "North Cornwall"]),
+        olds=(
+            LAUnit("Penwith", "E07000023"),
+            LAUnit("Kerrier", "E07000021"),
+            LAUnit("Carrick", "E07000020"),
+            LAUnit("Restormel", "E07000024"),
+            LAUnit("Caradon", "E07000019"),
+            LAUnit("North Cornwall", "E07000022"),
+        ),
         news=(LAUnit("Cornwall", "E06000052"),),
-        source="Wikipedia: 2009 structural changes to local government in England (Cornwall).",
+        source=(
+            "Wikipedia: 2009 structural changes to local government in England (Cornwall). "
+            "Predecessor codes: ONS Code History Database (July 2024), ChangeHistory.csv - "
+            "all six terminated 31/03/2009, ENTITYCD=E07, PARENTCD=E10000005 (Cornwall CC)."
+        ),
     ),
     ReorgEvent(
         event_id="county_durham_2009",
         effective_date="2009-04-01",
         change_type=ChangeType.MERGE,
-        olds=tuple(
-            LAUnit(n)
-            for n in ["Durham City", "Easington", "Sedgefield", "Teesdale", "Wear Valley", "Derwentside", "Chester-le-Street"]
+        olds=(
+            LAUnit("Durham City", "E07000056"),
+            LAUnit("Easington", "E07000057"),
+            LAUnit("Sedgefield", "E07000058"),
+            LAUnit("Teesdale", "E07000059"),
+            LAUnit("Wear Valley", "E07000060"),
+            LAUnit("Derwentside", "E07000055"),
+            LAUnit("Chester-le-Street", "E07000054"),
         ),
         news=(LAUnit("County Durham", "E06000047"),),
-        source="Wikipedia: 2009 structural changes to local government in England (County Durham).",
+        source=(
+            "Wikipedia: 2009 structural changes to local government in England (County Durham). "
+            "Predecessor codes: ONS CHD (July 2024) - terminated 31/03/2009, PARENTCD=E10000010."
+        ),
     ),
     ReorgEvent(
         event_id="northumberland_2009",
         effective_date="2009-04-01",
         change_type=ChangeType.MERGE,
-        olds=tuple(
-            LAUnit(n) for n in ["Blyth Valley", "Wansbeck", "Castle Morpeth", "Tynedale", "Alnwick", "Berwick-upon-Tweed"]
+        olds=(
+            LAUnit("Blyth Valley", "E07000159"),
+            LAUnit("Wansbeck", "E07000162"),
+            LAUnit("Castle Morpeth", "E07000160"),
+            LAUnit("Tynedale", "E07000161"),
+            LAUnit("Alnwick", "E07000157"),
+            LAUnit("Berwick-upon-Tweed", "E07000158"),
         ),
         news=(LAUnit("Northumberland", "E06000057"),),  # archaic code E06000048 seen in some early releases
-        source="Wikipedia: 2009 structural changes to local government in England (Northumberland).",
+        source=(
+            "Wikipedia: 2009 structural changes to local government in England (Northumberland). "
+            "Predecessor codes: ONS CHD (July 2024) - terminated 31/03/2009, PARENTCD=E10000022."
+        ),
     ),
     ReorgEvent(
         event_id="shropshire_2009",
         effective_date="2009-04-01",
         change_type=ChangeType.MERGE,
-        olds=tuple(
-            LAUnit(n) for n in ["North Shropshire", "Oswestry", "Shrewsbury and Atcham", "South Shropshire", "Bridgnorth"]
+        olds=(
+            LAUnit("North Shropshire", "E07000183"),
+            LAUnit("Oswestry", "E07000184"),
+            LAUnit("Shrewsbury and Atcham", "E07000185"),
+            LAUnit("South Shropshire", "E07000186"),
+            LAUnit("Bridgnorth", "E07000182"),
         ),
         news=(LAUnit("Shropshire", "E06000051"),),
-        source="Wikipedia: 2009 structural changes to local government in England (Shropshire).",
+        source=(
+            "Wikipedia: 2009 structural changes to local government in England (Shropshire). "
+            "Predecessor codes: ONS CHD (July 2024) - terminated 31/03/2009, PARENTCD=E10000026."
+        ),
     ),
     ReorgEvent(
         event_id="wiltshire_2009",
         effective_date="2009-04-01",
         change_type=ChangeType.MERGE,
-        olds=tuple(LAUnit(n) for n in ["Salisbury", "West Wiltshire", "Kennet", "North Wiltshire"]),
+        olds=(
+            LAUnit("Salisbury", "E07000232"),
+            LAUnit("West Wiltshire", "E07000233"),
+            LAUnit("Kennet", "E07000230"),
+            LAUnit("North Wiltshire", "E07000231"),
+        ),
         news=(LAUnit("Wiltshire", "E06000054"),),
-        source="Wikipedia: 2009 structural changes to local government in England (Wiltshire).",
+        source=(
+            "Wikipedia: 2009 structural changes to local government in England (Wiltshire). "
+            "Predecessor codes: ONS CHD (July 2024) - terminated 31/03/2009, PARENTCD=E10000033."
+        ),
     ),
     ReorgEvent(
         event_id="bedfordshire_central_2009",
         effective_date="2009-04-01",
         change_type=ChangeType.MERGE,
-        olds=(LAUnit("Mid Bedfordshire"), LAUnit("South Bedfordshire")),
+        olds=(LAUnit("Mid Bedfordshire", "E07000001"), LAUnit("South Bedfordshire", "E07000003")),
         news=(LAUnit("Central Bedfordshire", "E06000056"),),
-        source="Wikipedia: 2009 structural changes to local government in England (Bedfordshire).",
+        source=(
+            "Wikipedia: 2009 structural changes to local government in England (Bedfordshire). "
+            "Predecessor codes: ONS CHD (July 2024) - terminated 31/03/2009, PARENTCD=E10000001."
+        ),
     ),
     ReorgEvent(
         event_id="bedford_2009",
         effective_date="2009-04-01",
         change_type=ChangeType.RECODE,  # unchanged boundary, becomes unitary
-        olds=(LAUnit("Bedford"),),
+        olds=(LAUnit("Bedford", "E07000002"),),
         news=(LAUnit("Bedford", "E06000055"),),
-        source="Wikipedia: 2009 structural changes to local government in England (Bedfordshire).",
+        source=(
+            "Wikipedia: 2009 structural changes to local government in England (Bedfordshire). "
+            "Predecessor code: ONS CHD (July 2024) - terminated 31/03/2009, PARENTCD=E10000001."
+        ),
     ),
     ReorgEvent(
         event_id="cheshire_east_2009",
         effective_date="2009-04-01",
         change_type=ChangeType.MERGE,
-        olds=(LAUnit("Congleton"), LAUnit("Crewe and Nantwich"), LAUnit("Macclesfield")),
+        olds=(
+            LAUnit("Congleton", "E07000014"),
+            LAUnit("Crewe and Nantwich", "E07000015"),
+            LAUnit("Macclesfield", "E07000017"),
+        ),
         news=(LAUnit("Cheshire East", "E06000049"),),
-        source="Wikipedia: 2009 structural changes to local government in England (Cheshire).",
+        source=(
+            "Wikipedia: 2009 structural changes to local government in England (Cheshire). "
+            "Predecessor codes: ONS CHD (July 2024) - terminated 31/03/2009, PARENTCD=E10000004."
+        ),
     ),
     ReorgEvent(
         event_id="cheshire_west_2009",
         effective_date="2009-04-01",
         change_type=ChangeType.MERGE,
-        olds=(LAUnit("Chester"), LAUnit("Ellesmere Port and Neston"), LAUnit("Vale Royal")),
+        olds=(
+            LAUnit("Chester", "E07000013"),
+            LAUnit("Ellesmere Port and Neston", "E07000016"),  # CHD spells it "Ellesmere Port & Neston"
+            LAUnit("Vale Royal", "E07000018"),
+        ),
         news=(LAUnit("Cheshire West and Chester", "E06000050"),),
-        source="Wikipedia: 2009 structural changes to local government in England (Cheshire).",
+        source=(
+            "Wikipedia: 2009 structural changes to local government in England (Cheshire). "
+            "Predecessor codes: ONS CHD (July 2024) - terminated 31/03/2009, PARENTCD=E10000004."
+        ),
     ),
 )
 
@@ -405,7 +480,7 @@ REORG_2023 = (
 )
 
 EVENTS: tuple[ReorgEvent, ...] = (
-    (BARNSLEY_SHEFFIELD_2025,)
+    (BARNSLEY_SHEFFIELD_2025, SHEFFIELD_RECODE_2025)
     + REORG_2009
     + REORG_2019
     + REORG_2020
