@@ -88,23 +88,25 @@ def fetch_ons_population_estimates() -> None:
 
 
 def fetch_mhclg_band_d() -> None:
-    """MHCLG Council Tax levels, 2000-01 to 2025-26. ~26 separate releases; not auto-fetchable yet."""
-    raise ManualDownloadRequired(
-        "MHCLG Council Tax levels (Band D), 2000-01 to 2025-26:\n"
-        "  https://www.gov.uk/government/collections/council-tax-statistics\n"
-        "  Each year is a separate release. Download the 'Table 10'-equivalent area Band D\n"
-        "  sheet for each year, save to data/band_d/raw/<year>.xlsx (or .xls / .ods as published).\n"
-        "  See DATA.md: sheet layout changes across vintages, hence the per-vintage parsers\n"
-        "  in src/council_tax_freeze/parsers/band_d/ rather than one reader for all years."
-    )
+    """MHCLG's maintained live table, "Band D council tax figures 1993-94 to 2026-27" - ONE continuously-updated file, not 26 separate releases. See DATA.md."""
+    url = "https://assets.publishing.service.gov.uk/media/69e8ab2d9ca985145673b826/Band_D_2026-27.ods"
+    dest = DATA_DIR / "band_d" / "Band_D_1993_onwards.ods"
+    _download(url, dest)
 
 
 def fetch_voa_ctsop() -> None:
-    """VOA Council Tax: Stock of Properties, annual releases."""
-    raise ManualDownloadRequired(
-        "VOA Council Tax: Stock of Properties (CTSOP), annual:\n"
-        "  https://www.gov.uk/government/collections/council-tax-stock-of-properties-statistics\n"
-        "  Download CTSOP1.0 (or nearest equivalent) for each year, save to data/ctsop/raw/<year>.xlsx"
+    """VOA CTSOP1.0, two files covering 2000-01 to 2025-26: a consolidated 1993-2024 time series, plus the standalone 2025 release for the one year not yet folded in. See DATA.md for the double-counting bug in the consolidated file's 2019-2023 reorg-wave rows, fixed in the parser, not here."""
+    _download(
+        "https://assets.publishing.service.gov.uk/media/6685468cab5fc5929851b928/CTSOP1-0-1993-2024.zip",
+        DATA_DIR / "ctsop" / "CTSOP1_0_1993_2024.zip",
+    )
+    import zipfile
+
+    with zipfile.ZipFile(DATA_DIR / "ctsop" / "CTSOP1_0_1993_2024.zip") as zf:
+        zf.extractall(DATA_DIR / "ctsop" / "CTSOP1_0_1993_2024")
+    _download(
+        "https://assets.publishing.service.gov.uk/media/6a0c5ee5c510c3913d826863/2025_CT_SoP_Summary_Tables.xlsx",
+        DATA_DIR / "ctsop" / "2025_summary.xlsx",
     )
 
 

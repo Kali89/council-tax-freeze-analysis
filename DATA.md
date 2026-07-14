@@ -12,8 +12,8 @@ the hard way.
 
 | # | Dataset | Source | Purpose | Fetch |
 |---|---|---|---|---|
-| 1 | MHCLG Council Tax levels set by local authorities, annual releases, 2000-01 to 2025-26 | [gov.uk statistics releases](https://www.gov.uk/government/collections/council-tax-statistics) | Band D council tax (total, excl. parish precepts) per LA per year | Automatic where a stable URL pattern exists; manual instructions printed otherwise (early-2000s releases move around) |
-| 2 | VOA Council Tax: Stock of Properties (CTSOP), annual | [gov.uk statistics](https://www.gov.uk/government/collections/council-tax-stock-of-properties-statistics) | Band distribution (dwelling counts per band per LA per year) | Automatic where linked directly; manual otherwise |
+| 1 | MHCLG's live table "Band D council tax figures 1993-94 to 2026-27" — ONE continuously-maintained file, not 26 separate releases (see below) | [gov.uk live tables on Council Tax](https://www.gov.uk/government/statistical-data-sets/live-tables-on-council-tax) | Band D council tax, total incl. an averaged parish contribution (primary series) and a constructed excl.-parish variant | Automatic — stable direct-download URL |
+| 2 | VOA CTSOP1.0 — two files: a consolidated "1993 to 2024" time series plus the standalone 2025 release, covering 2000-01 to 2025-26 between them (see below) | [gov.uk council tax: stock of properties, 2025](https://www.gov.uk/government/statistics/council-tax-stock-of-properties-2025) | Band distribution (dwelling counts per band per LA per year) | Automatic — both are stable direct-download URLs |
 | 3 | UK House Price Index, full file | [gov.uk HPI downloads](https://www.gov.uk/government/statistical-data-sets/uk-house-price-index-data-downloads) | LA-level appreciation series, Jan 1995 onward | Automatic (single large CSV) |
 | 4 | ONS LAD boundaries (May 2025) + historic LAD change lookups | [ONS Open Geography Portal](https://geoportal.statistics.gov.uk/) | Boundary harmonisation to 2025 geography; mapping | Automatic via ONS API where available; manual for lookups not exposed via API |
 | 5 | ONS mid-year population / dwelling stock estimates | [ONS](https://www.ons.gov.uk/) | Per-dwelling and per-capita denominators | Automatic |
@@ -60,21 +60,99 @@ accumulated stock, not re-discovering the flow.
 
 ## Known issues by dataset
 
-**MHCLG Band D releases (#1).** Sheet naming, column layout, and LA coding
-change between years — there is no single reader that works across all ~26
-vintages. Each vintage gets its own parser in
-`src/council_tax_freeze/parsers/band_d/`, all validated against the
-publisher's own headline national average Band D figure for that year.
-A parser that can't reproduce the published national average fails loudly
-rather than silently producing a plausible-looking wrong number.
+**MHCLG Band D (#1): one live table, not 26 parsers.** The brief anticipated
+26 separate annual releases needing 26 separate parsers. In fact MHCLG
+maintains a single continuously-updated file — "Band D council tax figures
+1993-94 to 2026-27" — with one row per historic LA identity and one column
+group per year, back to 1993-94. `src/council_tax_freeze/parsers/band_d/parse.py`
+reads this directly. Two bases are extracted:
 
-**CTSOP (#2).** Some vintages may carry Barnsley/Sheffield under their
-pre-2025 codes (E08000016/E08000019 rather than E08000038/E08000039) — see
-the boundary harmonisation note below. This is a genuine small
-partial-territory transfer (12 dwellings), not a South Yorkshire-wide
-reorganisation — an earlier draft of this file wrongly described it as a
-"2023 South Yorkshire unitary change." Handled by the boundary
-harmonisation module (Phase 1), not patched ad hoc in the CTSOP parser.
+- `band_d_incl_parish` (Table 5, "Area council tax"): the district's own
+  precept (itself including an averaged parish contribution) plus
+  county/police/fire. This IS the standard published headline figure —
+  verified to the pound against a completely separate, frozen 2013 MHCLG
+  PDF for 20 straight years (2000-01 to 2012-13), and against contemporaneous
+  standalone releases for 2017-18, 2018-19, 2022-23, 2024-25 and 2025-26 (18
+  of 26 study years independently checked; the rest are unchecked but
+  produced by the identical, already-verified mechanism). This is the
+  PRIMARY series.
+- `band_d_excl_parish`: constructed as `band_d_incl_parish` minus the
+  district's own parish component (Table 1 minus Table 3, both
+  district-precept-only, so their difference IS the parish component).
+  Carried as a documented robustness variant per the parish-basis decision
+  (see project log) — the North/South gap is reported on both bases in
+  03_results.ipynb, and the delta between them is itself a finding, not
+  assumed to be immaterial.
+
+**Known gaps in the Band D live table**, found by cross-referencing every
+Phase 1 predecessor code against it (`predecessor_gaps` in `BandDResult`,
+enforced by a test that fails if a NEW undocumented gap appears): five
+predecessor codes have zero data anywhere in the file.
+Barnsley (E08000016) and Sheffield (E08000019) are **not gaps** — MHCLG
+applies their current codes (E08000038/E08000039) retroactively across the
+whole 1993-2027 span, since neither had a real boundary change until the
+small 2025 one. Durham City (E07000056), Crewe and Nantwich (E07000015),
+and Shrewsbury and Atcham (E07000185) **are genuine gaps**: real
+predecessor billing authorities with zero data despite every other member
+of their 2009 merger group being fully present. No explanation found;
+recorded as an unexplained limitation, not smoothed over.
+
+**VOA CTSOP (#2): a genuine double-counting bug in VOA's own consolidated
+file, found and fixed.** Like Band D, VOA maintains a consolidated time
+series ("CTSOP1.0 ... 1993 to 2024") rather than requiring 26 separate
+parsers — but unlike Band D's live table, it has a real data-quality
+problem. Checked, not assumed: for the 2009 reorg wave, VOA retroactively
+aggregated predecessor districts under their current successor code and
+correctly dropped the predecessor rows entirely (e.g. no separate "Penwith"
+row exists after 2009 — Cornwall's row alone carries the full history back
+to 1993, and its pre-2009 figures **exactly** equal the sum of its six
+predecessors — verified). But for the 2019, 2020, 2021 and 2023 waves, VOA
+did the first half of this (the successor row correctly carries the
+retroactive sum — Dorset UA's 2015 total exactly equals the sum of its five
+predecessor districts' 2015 totals) but **not the second half**: the
+predecessor rows were never dropped, and continued to be updated with real,
+growing dwelling counts for years after their own legal abolition. East
+Dorset (abolished 1 April 2019) shows a real, increasing dwelling count
+every year through 2024, five years after it ceased to exist.
+
+Consequence: summing every LAUA row in the raw file overcounts England's
+total stock by roughly 1.4-1.8 million dwellings a year (about 7%), growing
+over time as the double-counted areas' own stock grows — confirmed against
+the file's own England ("NATL") row, which does NOT show this inflation
+(`duplication_check` in `CTSOPResult`). The standalone 2025 release, built
+differently, shows no comparable excess (~250 dwellings, immaterial).
+
+**Fix, in `src/council_tax_freeze/parsers/ctsop/parse.py`:** for every
+`MERGE` event in `reorg_events.py`, keep only the successor row (already
+correct for the whole period) and drop every predecessor row entirely,
+rather than trying to reconstruct a before/after cutover. Post-fix, the LA
+row sum matches the file's own national row to within a few hundred
+dwellings out of tens of millions (<0.01%) for every year 2000-01 to
+2025-26 — down from the ~7% raw excess. The dropped predecessor rows are
+NOT discarded: they are genuine, non-duplicated dwelling counts for
+2019-2023-wave predecessors, kept in `CTSOPResult.predecessor_weights`,
+because they're exactly the weights Phase 4 will need to combine Band D's
+predecessor-level RATES for those same LAs. No equivalent exists for the
+2009 wave (VOA never published individual predecessor rows for it at all)
+— a real, flagged gap for Phase 4's weighting approach, not solved here.
+
+**Cross-series disagreement (Band D vs CTSOP), as expected and requested to
+be logged rather than smoothed over:** the two source series handle
+historic identity completely differently. MHCLG's Band D live table mostly
+*preserves* historic predecessor rows (only relabelling the two pure-RECODE
+cases, Bedford and Barnsley/Sheffield, under their current code) — which is
+why Band D coverage genuinely *declines* over time as predecessor rows
+disappear at each reorg (354 in 2000-01, falling to 296 from 2023-24). VOA's
+CTSOP does the opposite: it *retroactively aggregates* merge-affected LAs
+under their current code for the whole 1993-2024 span (once the
+double-counting bug above is fixed), so CTSOP coverage is a flat 296 for
+every single year 2000-01 to 2025-26, with no time variation at all. Same
+underlying history, two structurally opposite representations. Neither is
+"wrong" for its own stated purpose, but it means the two series cannot be
+joined naively on (code, year) for the pre-2009 or 2019-2023 periods without
+going through the Phase 1 crosswalk, and it's the reason Band D's dwelling
+weights for those predecessor rates have to come from a different source
+than CTSOP for the 2009 wave specifically (see above).
 
 **UK HPI (#3).** LA-level series start January 1995, not April 1991 — see
 the README's Framing section. A handful of LAs have suppressed or
