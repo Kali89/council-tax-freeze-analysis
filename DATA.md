@@ -68,11 +68,13 @@ publisher's own headline national average Band D figure for that year.
 A parser that can't reproduce the published national average fails loudly
 rather than silently producing a plausible-looking wrong number.
 
-**CTSOP (#2).** Some vintages use pre-reorganisation LA codes — e.g. the
-2023 South Yorkshire unitary changes mean older releases carry Barnsley and
-Sheffield under codes that predate the current ones. These are handled by
-the boundary harmonisation module (Phase 1), not patched ad hoc in the
-CTSOP parser.
+**CTSOP (#2).** Some vintages may carry Barnsley/Sheffield under their
+pre-2025 codes (E08000016/E08000019 rather than E08000038/E08000039) — see
+the boundary harmonisation note below. This is a genuine small
+partial-territory transfer (12 dwellings), not a South Yorkshire-wide
+reorganisation — an earlier draft of this file wrongly described it as a
+"2023 South Yorkshire unitary change." Handled by the boundary
+harmonisation module (Phase 1), not patched ad hoc in the CTSOP parser.
 
 **UK HPI (#3).** LA-level series start January 1995, not April 1991 — see
 the README's Framing section. A handful of LAs have suppressed or
@@ -100,15 +102,29 @@ Every one of these, checked individually, is a **clean regrouping**: each
 predecessor district's territory goes wholly into exactly one successor
 authority — none of them split a single old district's territory between
 two different new authorities. That means every merge in this period is
-dwelling-count-preserving by construction (summation, not apportionment).
-See Phase 1 acceptance criteria (project log) for what happens if a future
-data source reveals a case that isn't a clean regrouping — the code fails
-loudly rather than guessing a split.
+dwelling-count-preserving by construction (summation, not apportionment) —
+encoded and tested in `src/council_tax_freeze/boundaries/reorg_events.py`
+and `crosswalk.py`.
 
-Separately, some vintages recode an LA without any geography change at all
-(e.g. CTSOP's pre-2023 South Yorkshire codes for Barnsley/Sheffield,
-E08000016/E08000019, map 1:1 to current codes E08000038/E08000039) — handled
-as an identity mapping, not a merge.
+There is exactly one genuine exception in the whole 2000-2025 period, and
+it demonstrates why the "fail loudly, don't guess" design matters: the
+**Barnsley and Sheffield (Boundary Change) Order 2024** (in force 1 April
+2025) transferred the Oughtibridge Mill development — 12 existing dwellings,
+284 further planned — from Barnsley (E08000016 → E08000038) to Sheffield
+(E08000019 → E08000039). CTSOP's LA-level totals can't tell us which band(s)
+those 12 dwellings sit in; we apply the Order's own fixed count and flag the
+band-distribution assumption explicitly (see `reorg_events.py`) rather than
+inventing a proportional split with no basis. This is encoded as a `SPLIT`
+event, which the module's own validation refuses to construct without a
+cited `Apportionment` — see `tests/test_boundaries.py`.
+
+New (successor) GSS codes for every event above are individually verified
+against ONS or a maintained names-and-codes reference. Predecessor codes for
+the 2009 wave specifically (e.g. Cornwall's six former districts) are
+**not** verified against an authoritative source — the reference used only
+covers abolitions from 2015 onward — and are stored name-only pending Phase
+2, when the real historic MHCLG/CTSOP files will show what codes (or names)
+those releases actually used.
 
 **Price Paid calibration slice (#6).** Used only to sanity-check the
 Band A/H midpoint imputation ratios (see `notebooks/02_method.ipynb`) in a
