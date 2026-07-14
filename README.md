@@ -81,16 +81,22 @@ and some -£Y per dwelling in low-appreciation areas.
   asset value — the premise of a property tax, and a defensible one, but a
   premise, not a finding. This repo prefers *redistributive gap* or
   *divergence from a value-proportional benchmark*.
-- **Revenue-neutrality is a load-bearing assumption**, tested (not assumed)
-  by Variant 3: did councils in high-appreciation areas actually set lower
-  Band D rates as their implicit tax base grew, which would make the
-  redistribution smaller than Variants 1-2 imply on their own? This is also
-  the strongest form of the objection IFS (2020) themselves raise: they
-  note the cross-LA unfairness could in principle be corrected entirely
-  through the funding settlement — redistributing grant in line with
-  current property values — without reforming council tax bands at all.
-  See `notebooks/02_method.ipynb` and the Variant 3 regression results for
-  the honest answer, including if it undermines the headline.
+- **Revenue-neutrality is a load-bearing assumption, tested (not assumed) by
+  Variant 3 — and it strengthens the headline.** Did councils in
+  high-appreciation areas actually set lower Band D rates as their implicit
+  tax base grew? This is the strongest form of the objection IFS (2020)
+  themselves raise: they note the cross-LA unfairness could in principle be
+  corrected entirely through the funding settlement, without reforming
+  council tax bands at all. Tested directly (panel regression, 2015-16 to
+  2025-26, LA and year fixed effects): across 263 non-London LAs, no such
+  relationship exists — a tight null, not a noisy one. A pooled coefficient
+  across all 296 LAs *is* significant, but it is driven entirely by London
+  (within-LA correlation −0.57 in London vs +0.08 elsewhere), and the
+  mechanism is almost certainly the same business-rate/reserves anomaly
+  already found and investigated for individual London boroughs earlier in
+  the pipeline — confounding, not compensation. See DATA.md "Phase 6" and
+  `notebooks/02_method.ipynb` "Variant 3" for the full account, including
+  why the pooled coefficient must never be applied to a non-London LA.
 - **Band-midpoint reconstruction is an approximation.** We do not observe
   1991 property values, only 1991 bands, several of which are open-ended
   (Band A below £40k, Band H above £320k with no upper bound). Midpoint

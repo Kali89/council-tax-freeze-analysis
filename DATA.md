@@ -18,7 +18,7 @@ the hard way.
 | 4 | ONS LAD boundaries (May 2025) + historic LAD change lookups | [ONS Open Geography Portal](https://geoportal.statistics.gov.uk/) | Boundary harmonisation to 2025 geography; mapping | Automatic via ONS API where available; manual for lookups not exposed via API |
 | 5 | ONS mid-year population / dwelling stock estimates | [ONS](https://www.ons.gov.uk/) | Per-dwelling and per-capita denominators | Automatic |
 | 6 | HM Land Registry Price Paid Data — 1995 and 1996 annual files only | [gov.uk price-paid downloads](https://www.gov.uk/government/statistical-data-sets/price-paid-data-downloads) | One-off calibration check on the Band A/H midpoint imputation (not used in the main pipeline) | Automatic — annual files are small; we do not use the multi-GB complete file |
-| 7 | MHCLG local government finance settlement data (Revenue Support Grant / Settlement Funding Assessment / Core Spending Power, by vintage) | [gov.uk local government finance statistics](https://www.gov.uk/government/collections/local-government-finance-statistics) | Control variable for the Variant 3 regression (did councils adjust rates as their implicit base grew?) | Manual — no stable single series across the full period; instructions printed |
+| 7 | MHCLG Core Spending Power table, final 2025-26 settlement — ONE maintained file with one sheet per year back to 2015-16, not per-vintage releases (see Phase 6 below; pre-2015-16, Revenue Support Grant / early Settlement Funding Assessment, is out of scope by design) | [Core Spending Power table: final local government finance settlement 2025 to 2026](https://www.gov.uk/government/publications/core-spending-power-table-final-local-government-finance-settlement-2025-to-2026) | Control variable for the Variant 3 regression (did councils adjust rates as their implicit base grew?) | Automatic — stable direct-download URL |
 | 8 | IFS published LA-level revaluation-day results, from Adam, Hodge, Phillips & Xu (2020), *Revaluation and reform: bringing council tax in England into the 21st century*, IFS Report R169 | [ifs.org.uk/research/english-council-tax](https://www.ifs.org.uk/research/english-council-tax) | Known-answer validation for the Phase 4 counterfactual engine (see below) — not an input to the pipeline itself | Manual — ifs.org.uk returns 403 to automated fetch; the report PDF itself is mirrored by the [Nuffield Foundation](https://www.nuffieldfoundation.org/wp-content/uploads/2020/03/R169-Revaluation-and-reform-bringing-council-tax-in-England-into-the-21st-century.pdf) |
 
 ## Prior literature
@@ -642,3 +642,138 @@ Both variants correctly show the headline direction throughout: Kensington
 and Chelsea's cumulative gap is negative (paid less than a
 value-proportional counterfactual) and Hartlepool's is positive (paid
 more), under both variants, over the whole headline period.
+
+## Phase 5: sensitivity sweep
+
+Run against thresholds pre-registered before any sweep cell beyond the
+base case was computed — see
+[SENSITIVITY_PREREGISTRATION.md](SENSITIVITY_PREREGISTRATION.md) (committed
+first) and [SENSITIVITY_RESULTS.md](SENSITIVITY_RESULTS.md) (results,
+reported as a separate, dated document per the pre-registration's own
+rule not to edit it after the fact). Headline: nothing crossed a failure
+threshold, but the midpoint grid's predicted DIRECTION was backwards on
+both ratios, which broke the "our midpoint choices are the conservative
+corner" claim carried since Phase 3 — resolved explicitly (not deferred):
+the base case (0.75, 1.5) is a central estimate with an
+empirically-anchored range of roughly £206-232/dwelling/year for the
+North East, sitting near the top of that range, not its floor. See
+`config.py`'s Band A/H section, corrected in the same pass, for the full
+account.
+
+## Phase 6: does rate-setting already offset the freeze? (Variant 3)
+
+The strongest form of the objection this whole repository exists to
+test — IFS (2020) themselves note the cross-LA unfairness could in
+principle be corrected through the funding settlement alone, without
+touching council tax bands (see "Prior literature", above). Tested
+directly with a real regression, not left as a caveat — full account and
+every specification choice in `src/council_tax_freeze/regression/
+variant3.py`'s module docstring and `notebooks/02_method.ipynb`
+"Variant 3". Summary:
+
+**Panel: 2015-16 to 2025-26, not the full headline window** — Core
+Spending Power (the settlement control) doesn't exist as a concept before
+2015-16; reconstructing an equivalent from Revenue Support Grant / early
+Settlement Funding Assessment sources would need the Web Archive, not
+pursued (same decision logic as the tier-data scoping in Phase 4, applied
+to a genuinely different kind of gap - Variant 3 tests a BEHAVIOURAL
+REGULARITY across 296 LAs and 11 years, not a cumulative total, so it
+doesn't need to span the headline window to be informative).
+
+**Settlement data source, found and parsed
+(`parsers/settlement/parse.py`)**: MHCLG's Core Spending Power table for
+the 2025-26 settlement republishes the whole 2015-16-2025-26 series in
+one maintained file (same "live table" pattern as Band D), with real
+`ons_code` rows. Checked, not assumed: each sheet has FOUR row tiers
+(district/unitary/borough E06-E09 — the same 296-LA set as everywhere
+else in this pipeline; county E10; a single Greater London Authority row;
+a single Greater Manchester Combined Authority row from 2019-20) — the
+upper tiers are apportioned to their 2025-vintage constituent LAs by
+dwelling share, reusing `boundaries.precepting_groups.PRECEPTING_GROUP`
+from Phase 4, because they are NOT a rounding error: Cambridgeshire's own
+county row is 7.1x its five districts' own CSP combined, and the GLA's
+own row is 31.7% of the 33 London boroughs' own rows combined — the same
+"own precept is a small slice of the area total" structure Phase 4
+quantified for Band D. A known, quantified gap: `PRECEPTING_GROUP`
+reflects only the CURRENT tiering structure, so the 5 counties that
+unitarised DURING this window (Dorset 2019, Northamptonshire 2021,
+Cumbria/North Yorkshire/Somerset 2023) don't get their county CSP
+apportioned for years before their own reorg — 206 of 3,256 LA-year
+cells (6.3%), concentrated in ~25 predecessor LAs, understating their
+settlement control for those specific cells. Documented, not fixed —
+same decision framework as the Suffolk/Somerset 2019 CTSOP gap in Phase 4
+(small, bounded, quantified).
+
+**Specification**: year-on-year log growth in Band D rate, regressed on
+`relative_hpi` (`hpi_factor_la / hpi_factor_national` — the exact same
+quantity Variants 1/2 use, not a second definition), controlling for
+year-on-year change in Core Spending Power per dwelling, LA and year
+fixed effects, standard errors clustered by LA. Every choice — dependent
+variable, contemporaneous vs lagged relative_hpi, the settlement control,
+fixed effects, the era split — decided explicitly with the project owner
+before running anything.
+
+**Result: pooled significant, entirely a London effect, and the
+diagnosis is the same mechanism Phase 4 already found.**
+
+| | coefficient | 95% CI | p | n |
+|---|---|---|---|---|
+| Pooled, 296 LAs | -0.0243 | [-0.0318, -0.0167] | <0.0001 | 2,875 |
+| Non-London, 263 LAs | -0.0063 | [-0.0143, +0.0017] | 0.125 | 2,545 |
+| London only, 33 LAs | -0.0020 | [-0.0157, +0.0117] | 0.778 | 330 |
+
+The decisive diagnostic (`regression.variant3.within_la_correlation`) is
+not a regression p-value but the within-LA correlation between an LA's
+own year-to-year relative appreciation and its own rate growth: **-0.57
+in London, +0.08 in the rest of England** — not a weaker version of the
+same relationship, effectively zero with the wrong sign outside London.
+London boroughs' year-to-year relative_hpi swings are ~2.7x larger than
+elsewhere (within-LA std 0.107 vs 0.039), giving them outsized leverage
+on the pooled coefficient. Region-level average rate growth is nearly
+flat across all nine regions (North East 4.27%, London 4.20%) - this was
+never a simple cross-region gradient.
+
+**Diagnosis, not just observation**: the mechanism producing London's
+-0.57 is almost certainly the one Phase 4 already found and investigated
+(the Westminster IFS-gate investigation, above) - boroughs holding their
+own-tier rate artificially low on business-rate income and reserves, a
+local fiscal anomaly uncorrelated with (not caused by) the valuation
+freeze, which happens to correlate with London's high, volatile relative
+appreciation. Confounding, not compensation. Two independent
+investigations (a hand investigation in Phase 4, this regression's
+robustness check in Phase 6) landed on the same mechanism from two
+different directions.
+
+**The finding: the IFS objection is tested and does not hold outside
+London.** Across 263 non-London LAs and eleven years, no behavioural
+regularity exists between an LA's relative appreciation and its rate
+growth. The non-London specification is the PRIMARY result — a tight
+null (CI narrow enough to rule out an economically meaningful offset),
+not a noisy one. At the ceiling of what the non-London data supports
+(`interpret_offset`, `bound="ceiling"` — computed for each LA as
+whichever CI endpoint actually maximises the implied offset, since which
+raw numerical bound is "favourable to the objection" flips sign for a
+below-average-relative_hpi LA, a subtlety caught and fixed during
+development, not assumed away): Hartlepool 1.7%, County Durham 1.7%,
+Blackpool 2.3% of their measured Variant 1 gap.
+
+**The pooled/London-driven coefficient must never be applied to a
+non-London LA** — extrapolating London's -0.57 relationship onto
+Hartlepool (measured relationship: +0.08) would be the single most
+misleading number this analysis could produce. `interpret_offset` refuses
+to compute it: it raises if the requested LA's region doesn't match the
+regression's own subsample, rather than silently extrapolating across the
+boundary the data itself drew — enforced in code
+(`tests/test_variant3.py::test_pooled_result_cannot_be_applied_to_a_non_london_la`),
+not just in the write-up. Applied instead to where the relationship IS
+measured — Westminster and Kensington and Chelsea, both already flagged
+with the single-pot exposure caveat in Phase 4 — the pooled ceiling
+implies a sizeable apparent offset (27% and 36% of their measured gaps).
+Reported prominently, not buried, with the confound diagnosis attached.
+
+**Net effect on the headline: strengthens it.** Three independent lines
+of evidence — the single-pot exposure bound (Phase 4), the Westminster
+rate-anomaly investigation (Phase 4), and this regression's London/
+non-London decomposition (Phase 6) — all land on London as the place
+this pipeline's estimates are weakest, and none of them touch the North,
+which is where the headline number comes from.

@@ -142,13 +142,14 @@ def fetch_price_paid_calibration_slice() -> None:
 
 
 def fetch_mhclg_settlement_data() -> None:
-    """MHCLG local government finance settlement data (RSG / SFA / Core Spending Power)."""
-    raise ManualDownloadRequired(
-        "MHCLG local government finance settlement data:\n"
-        "  https://www.gov.uk/government/collections/local-government-finance-statistics\n"
-        "  Series naming changes over the period (RSG -> SFA -> Core Spending Power) - see\n"
-        "  DATA.md. Download whichever is current for each year, save to\n"
-        "  data/settlement/raw/<year>.xlsx"
+    """MHCLG Core Spending Power table, final 2025-26 settlement - ONE file with
+    one sheet per year back to 2015-16, not 11 separate per-vintage releases
+    (same "maintained live table" pattern as Band D). Pre-2015-16 (Revenue
+    Support Grant / early Settlement Funding Assessment era) is NOT in this
+    file and is out of scope for Phase 6 by design - see DATA.md "Variant 3"."""
+    _download(
+        "https://assets.publishing.service.gov.uk/media/67a0c9554731769befb047a3/CSP_information_table_LGFS_2025-26.xlsx",
+        DATA_DIR / "settlement" / "CSP_information_table_LGFS_2025-26.xlsx",
     )
 
 
