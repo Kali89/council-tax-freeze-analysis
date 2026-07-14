@@ -777,3 +777,92 @@ rate-anomaly investigation (Phase 4), and this regression's London/
 non-London decomposition (Phase 6) — all land on London as the place
 this pipeline's estimates are weakest, and none of them touch the North,
 which is where the headline number comes from.
+
+## Phase 7: presentation — where a technically correct finding could still mislead
+
+Nothing in Phase 7 is a modelling change; every risk here is in how the
+already-checked numbers are shown. Full account in
+`notebooks/03_results.ipynb`.
+
+**Aggregates (LA-total, region-total), added per explicit instruction
+before the presentation layer was built.** `src/council_tax_freeze/
+aggregates.py`. `engine.build`'s `variant1_gap`/`variant2_gap` are
+ALREADY total-£ figures per (LA, year), not per-dwelling — confirmed, not
+assumed: `test_revenue_neutrality_by_construction` already pins that gap
+sums to ~0 across all 296 LAs every year, only possible for a real £
+transfer figure. The cumulative LA-total is therefore `Σ_t gap[i,t]`,
+built up year by year from each year's own real dwelling stock — NOT the
+panel-average per-dwelling figure multiplied by a CURRENT dwelling count,
+which would silently assume today's (larger) housing stock existed
+throughout 2009-2026. `compute_naive_aggregate` exists only to measure
+this error (6.0% for Hartlepool) and is pinned in
+`tests/test_aggregates.py` so the two methods cannot later be
+"simplified" together. A real bug found while building this: CTSOP never
+switches Barnsley/Sheffield to their 2025 codes (unlike `engine.build`'s
+own output, which always does), so an unaliased merge produced `inf`
+per-dwelling figures for both — fixed with the same substitution already
+used twice elsewhere in this pipeline for the same reason, pinned with a
+regression test.
+
+**Region totals**: North East +£4.7bn, London −£24.0bn, 2009-10 to
+2025-26 (Variant 1). **London's aggregate is reported with its
+upper-bound status on the number itself**: 34.2% of the −£24.0bn comes
+from the five single-pot-flagged LAs (Westminster, Wandsworth, Hammersmith
+and Fulham, City of London, Kensington and Chelsea) — excluding them,
+London's total is −£15.8bn, not subject to that caveat. The North East
+total carries no equivalent caveat (none of the five flagged LAs are
+Northern; shared-tier exposure there is 14-16%; Variant 3 found no
+rate-setting compensation effect to worry about for non-London LAs
+either) — an asymmetry stated explicitly, not left for a reader to infer.
+
+**Framing, because a £-billions figure walks directly onto the turf of
+the regional net-fiscal-transfer literature.** The claim is that
+council tax's frozen 1991 valuation base has transferred billions from
+low- to high-appreciation regions THROUGH THE TAX SYSTEM ITSELF, in the
+opposite direction to the standard "London subsidises the regions"
+narrative, and that this has never been counted in the regional-transfer
+figures everyone cites — a missing ledger entry, not a competing ledger.
+`03_results.ipynb` states explicitly that this is not a claim about
+London's net fiscal position (which also depends on income tax, VAT,
+corporation tax, and spending allocation, none of which this pipeline
+touches) — the "but net transfers" rebuttal is answered by narrowing the
+claim, not by ignoring it.
+
+**Choropleth design — checked by rendering the map and looking at it, not
+assumed to be correct from the code.** `src/council_tax_freeze/viz/
+choropleth.py`. Boundary geometry: ONS "Local Authority Districts (May
+2025) Boundaries UK BGC (V2)" (ArcGIS item
+0b8528fb4132495181d82bb65c5e370a), same sourcing pattern as every other
+reference file in this pipeline — confirmed the 296 English features match
+`LAD_2025_CODES` exactly. Two real defects were caught only by rendering
+and inspecting the output image, not by reading the code:
+
+- **The colour direction was backwards.** Matplotlib's plain `"RdBu"`
+  maps LOW values to red, HIGH to blue — the opposite of every legend
+  label in this module ("red = overpaid" = positive = high). The first
+  rendered map showed the North in blue and London in red. Fixed with
+  `"RdBu_r"`.
+- **A black hatch pattern is nearly invisible against the darkest cells**
+  — exactly where the five flagged LAs sit, since they are also the most
+  extreme values. Fixed two ways: a fixed, saturated border colour
+  (`#39FF14`) that never blends into the diverging colour scale at either
+  end, and a zoomed London inset (the flagged LAs are geographically tiny
+  on an England-wide map regardless of colour), since inspecting a crop
+  of the first version showed the hatching alone was not legible at that
+  scale.
+
+The colour scale itself is clipped to the 2nd/98th percentile of the
+UNFLAGGED data, not the raw min/max — a handful of extreme values would
+otherwise saturate the scale and make every other LA look pale, which
+would happen to work against "lead with the North" even though it is a
+purely cartographic problem, which is exactly why it is named here rather
+than adjusted quietly.
+
+**What was deliberately not built.** No choropleth of the 2000-09
+backward-extension period — it uses imputed, not observed, band shares,
+and sharing a colour scale or figure with the observed 2009-26 headline
+period would present two different evidentiary standards in one visual
+register. If ever added, `viz/choropleth.py`'s module docstring requires
+it to be visually distinct (e.g. diagonal stripes across the whole map),
+never share a colour scale with the headline map, and never appear
+side-by-side implying equivalence.

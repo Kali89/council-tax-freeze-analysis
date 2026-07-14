@@ -1,12 +1,5 @@
 # Council Tax Freeze Analysis
 
-**Status: work in progress.** This README describes the intended scope and
-framing. Headline figures will be filled in as the pipeline is built —
-see `notebooks/03_results.ipynb` for current results, if present, before
-citing anything from here.
-
-## What this is
-
 Council tax in England is levied on property bands fixed at 1 April 1991
 valuations, never revalued since. Property values have diverged enormously by
 region over that period — London and the South East appreciated far faster
@@ -15,14 +8,23 @@ than the North and Midlands — while the band multipliers that convert a
 narrower than the true spread in property values).
 
 This repository estimates, for each English local authority: **if council
-tax bands had been periodically revalued since 2000, how much more or less
-would that authority have paid, cumulatively, per dwelling?**
+tax bands had been periodically revalued since 2009, how much more or less
+would that authority have paid, per dwelling, per year, than a
+value-proportional benchmark?**
+
+**Hartlepool has overpaid roughly £5,900 per dwelling since 2009-10.** The
+North East as a region has overpaid a central estimate of £227.63 per
+dwelling per year (empirically-anchored range ~£206-232 — a central
+estimate, not a floor, see Framing below), against a value-proportional
+benchmark. London is the arithmetic mirror image of the same closed,
+revenue-neutral system, not a separate finding about London — see
+`notebooks/03_results.ipynb` for the full results, including LA-total and
+region-total aggregates, and read **Framing** and "What this does not
+show" (in the results notebook) before citing any number from this repo.
 
 The output is a *redistributive gap* — the divergence between what an
 authority actually paid and what a value-proportional benchmark would have
 charged it — not a claim about subsidy, and not a claim about house prices.
-See **Framing**, below, before drawing conclusions from any number in this
-repo.
 
 ## Prior literature
 
@@ -66,9 +68,16 @@ full citations and how they shape the Variant 3 validation below.
 **The claim this analysis supports is narrow and descriptive:** because
 council tax bands are frozen at 1991 values, local authorities in
 high-appreciation areas have paid a declining share of national council tax
-revenue relative to the market value of their housing stock. Cumulatively
-since 2000, this amounts to some £X per dwelling in high-appreciation areas,
-and some -£Y per dwelling in low-appreciation areas.
+revenue relative to the market value of their housing stock. Over the
+headline period (2009-10 to 2025-26), this amounts to a central estimate of
+**+£227.63 per dwelling per year in the North East** (empirically-anchored
+range ~£206-232) and **-£394.92 per dwelling per year in London** — the
+latter driven in part by a known, quantified upper-bound bias in five
+inner-London LAs (see below and DATA.md "Phase 4"). Aggregated across the
+whole period: **+£4.7bn (North East) and -£24.0bn (London, of which 34%
+comes from the five flagged LAs)** — see `notebooks/03_results.ipynb`
+"Aggregates" for why this is reported as a missing entry in the regional
+net-transfer ledger, not a competing claim about London's fiscal position.
 
 **What it does not support:**
 

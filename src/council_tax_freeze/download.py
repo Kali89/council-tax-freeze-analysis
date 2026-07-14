@@ -62,15 +62,17 @@ def fetch_uk_hpi() -> None:
 
 
 def fetch_ons_lad_boundaries() -> None:
-    """ONS LAD (2025) boundary GEOMETRY, for Phase 7 choropleths - names/codes are already committed, see below."""
-    raise ManualDownloadRequired(
-        "ONS LAD boundary GEOMETRY (for choropleth maps, Phase 7):\n"
-        "  https://geoportal.statistics.gov.uk/ -> search 'Local Authority Districts May 2025 UK BGC'\n"
-        "  Download as GeoJSON, save to data/boundaries/lad_2025.geojson\n"
-        "  NOTE: the 296 LA CODES AND NAMES (no geometry) needed for boundary harmonisation\n"
-        "  are already committed at src/council_tax_freeze/boundaries/lad_2025.py - fetched\n"
-        "  via the ArcGIS FeatureServer directly (item 5779a9578f0e48ccacef6af41546b56b), see\n"
-        "  DATA.md. This function is only for the polygon geometry Phase 7 needs to draw maps."
+    """ONS LAD (May 2025) boundary GEOMETRY, for Phase 7 choropleths - names/
+    codes (no geometry) are already committed, see boundaries/lad_2025.py.
+    "Local Authority Districts (May 2025) Boundaries UK BGC (V2)" (ArcGIS
+    item 0b8528fb4132495181d82bb65c5e370a, FeatureServer LAD_MAY_2025_UK_BGC_V2),
+    same sourcing pattern as lad_2025.py/precepting_groups.py/regions.py -
+    queried directly as GeoJSON. Confirmed directly: all 361 UK features,
+    296 with an "E" prefix, match boundaries.lad_2025.LAD_2025_CODES exactly."""
+    _download(
+        "https://services1.arcgis.com/ESMARspQHYMw9BZ9/arcgis/rest/services/"
+        "LAD_MAY_2025_UK_BGC_V2/FeatureServer/0/query?where=1%3D1&outFields=LAD25CD,LAD25NM&outSR=4326&f=geojson",
+        DATA_DIR / "boundaries" / "lad_2025.geojson",
     )
 
 
