@@ -19,6 +19,44 @@ the hard way.
 | 5 | ONS mid-year population / dwelling stock estimates | [ONS](https://www.ons.gov.uk/) | Per-dwelling and per-capita denominators | Automatic |
 | 6 | HM Land Registry Price Paid Data — 1995 and 1996 annual files only | [gov.uk price-paid downloads](https://www.gov.uk/government/statistical-data-sets/price-paid-data-downloads) | One-off calibration check on the Band A/H midpoint imputation (not used in the main pipeline) | Automatic — annual files are small; we do not use the multi-GB complete file |
 | 7 | MHCLG local government finance settlement data (Revenue Support Grant / Settlement Funding Assessment / Core Spending Power, by vintage) | [gov.uk local government finance statistics](https://www.gov.uk/government/collections/local-government-finance-statistics) | Control variable for the Variant 3 regression (did councils adjust rates as their implicit base grew?) | Manual — no stable single series across the full period; instructions printed |
+| 8 | IFS published LA-level revaluation-day results, from Adam, Hodge, Phillips & Xu (2020), *Revaluation and reform: bringing council tax in England into the 21st century*, IFS Report R169 | [ifs.org.uk/research/english-council-tax](https://www.ifs.org.uk/research/english-council-tax) | Known-answer validation for the Phase 4 counterfactual engine (see below) — not an input to the pipeline itself | Manual — ifs.org.uk returns 403 to automated fetch; the report PDF itself is mirrored by the [Nuffield Foundation](https://www.nuffieldfoundation.org/wp-content/uploads/2020/03/R169-Revaluation-and-reform-bringing-council-tax-in-England-into-the-21st-century.pdf) |
+
+## Prior literature
+
+This is not the first analysis of this mechanism, and the README says so
+prominently. Two references matter enough to flag here because they
+constrain how Phase 4 validates the engine and how the Variant 3 regression
+is framed:
+
+- **Adam, Hodge, Phillips & Xu (2020), IFS Report R169.** Establishes that
+  council tax has become more regressive since 1991 because values rose
+  fastest where they were already highest (their Figure 2.4: London prices
+  November 2019 were >6x January 1995, vs ~3x in the North East), and —
+  the point that matters most for Variant 3 — that because central
+  government funding to LAs still references relative 1991 property
+  values, "councils in the North East must now levy more tax on a property
+  worth (say) £250,000 than councils in London, if both are to deliver the
+  spending on services deemed necessary by central government." That is a
+  published statement that the unfairness could in principle be corrected
+  through the funding settlement alone, without touching council tax bands
+  — the strongest form of the objection Variant 3 exists to test.
+- **Breach (2024), Centre for Cities, "Towards fiscal devolution."** Models
+  revaluation plus additional top/bottom bands and hits the same open-band
+  imputation problem we solved in `config.py` (their footnote: "more
+  conservative values have been used for the modelling for these bands") —
+  cited as precedent for our approach, not just a coincidence. Also argues
+  revaluation without fiscal devolution risks "minimal or zero improvement
+  to incentives, resource, and fairness... despite huge political costs" —
+  relevant context for why Variant 3's answer matters politically, not just
+  statistically.
+
+**What's actually new here:** both are snapshot counterfactuals — what
+happens if we revalue *now*, with distributional analysis of winners and
+losers on revaluation day. Neither publishes the cumulative magnitude of
+the freeze's redistributive effect as an LA-level time series. "London
+would pay £X more after revaluation" is a different claim from "London has
+underpaid £Y per dwelling cumulatively since 2000." We are quantifying the
+accumulated stock, not re-discovering the flow.
 
 ## Known issues by dataset
 
@@ -44,14 +82,33 @@ HPI series regardless of which HPI-geography sensitivity variant is active,
 since there is no LA-level alternative to fall back to.
 
 **Boundary harmonisation (#4).** No single ONS lookup spans 2000-2025.
-The crosswalk is built by chaining vintage-to-vintage lookups across four
-reorganisation waves: 2009 (Cornwall, Wiltshire, Shropshire, etc. unitary),
-2019 (Buckinghamshire, Dorset/BCP unitary), 2020 (West Suffolk, West
-Northamptonshire etc.), and 2023 (North Yorkshire, Somerset, Cumbria split
-into Cumberland/Westmorland). Where an old LA maps to more than one new LA
-or vice versa, dwelling counts are apportioned rather than duplicated or
-dropped — tested in `tests/` to confirm total dwelling counts are preserved
-through the chain.
+The crosswalk is built by chaining vintage-to-vintage lookups across five
+reorganisation waves, dates and constituent districts verified against
+Wikipedia/legislation.gov.uk rather than assumed:
+
+- **2009**: Cornwall, County Durham, Northumberland, Shropshire, Wiltshire
+  (whole ex-county mergers); Bedfordshire → Bedford + Central Bedfordshire;
+  Cheshire → Cheshire East + Cheshire West and Chester.
+- **2019**: Dorset + Poole + Bournemouth → Dorset + Bournemouth,
+  Christchurch and Poole; Suffolk → West Suffolk + East Suffolk.
+- **2020**: Buckinghamshire → Buckinghamshire Council.
+- **2021**: Northamptonshire → North Northamptonshire + West Northamptonshire.
+- **2023**: Cumbria → Cumberland + Westmorland and Furness; North Yorkshire
+  → North Yorkshire Council; Somerset → Somerset Council.
+
+Every one of these, checked individually, is a **clean regrouping**: each
+predecessor district's territory goes wholly into exactly one successor
+authority — none of them split a single old district's territory between
+two different new authorities. That means every merge in this period is
+dwelling-count-preserving by construction (summation, not apportionment).
+See Phase 1 acceptance criteria (project log) for what happens if a future
+data source reveals a case that isn't a clean regrouping — the code fails
+loudly rather than guessing a split.
+
+Separately, some vintages recode an LA without any geography change at all
+(e.g. CTSOP's pre-2023 South Yorkshire codes for Barnsley/Sheffield,
+E08000016/E08000019, map 1:1 to current codes E08000038/E08000039) — handled
+as an identity mapping, not a merge.
 
 **Price Paid calibration slice (#6).** Used only to sanity-check the
 Band A/H midpoint imputation ratios (see `notebooks/02_method.ipynb`) in a

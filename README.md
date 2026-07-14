@@ -24,6 +24,42 @@ charged it — not a claim about subsidy, and not a claim about house prices.
 See **Framing**, below, before drawing conclusions from any number in this
 repo.
 
+## Prior literature
+
+This mechanism is not novel — a reader who knows the field will spot it
+immediately if we don't say so ourselves.
+
+**Adam, Hodge, Phillips & Xu (2020), *Revaluation and reform: bringing
+council tax in England into the 21st century*, IFS Report R169** (funded
+by the Nuffield Foundation) established that council tax has become more
+regressive since 1991 because property values rose fastest where they were
+already highest — an explicitly North/South story (London prices in
+November 2019 were over six times their January 1995 level; barely three
+times in the North East). Crucially, they also established that because
+central government's funding allocation to local authorities still
+references relative 1991 property values, "councils in the North East must
+now levy more tax on a property worth (say) £250,000 than councils in
+London, if both are to deliver the spending on services deemed necessary
+by central government." That is our mechanism, stated in print in 2020.
+
+**Breach (2024), Centre for Cities, "Towards fiscal devolution"** (in
+*Devolution Solution*) independently models revaluation plus additional
+bands, hits the same open-band imputation problem this repo solves in
+`config.py`, and — like us — deliberately chose conservative values for the
+top and bottom bands rather than a best guess (cited as precedent in
+DATA.md). It also argues revaluation without fiscal devolution risks
+delivering little fairness gain for large political cost.
+
+**What this repo adds:** both of the above are snapshot counterfactuals —
+what happens if bands are revalued *now*, with distributional analysis of
+winners and losers on revaluation day. Neither publishes the cumulative
+magnitude of the freeze's redistributive effect as a local-authority-level
+time series. "London would pay £X more after revaluation" is a different
+claim from "London has underpaid £Y per dwelling cumulatively since 2000."
+This repo quantifies the accumulated stock, not the flow IFS and Centre for
+Cities already described. See DATA.md's "Prior literature" section for the
+full citations and how they shape the Variant 3 validation below.
+
 ## Framing — read this before the results
 
 **The claim this analysis supports is narrow and descriptive:** because
@@ -47,9 +83,13 @@ and some -£Y per dwelling in low-appreciation areas.
 - **Revenue-neutrality is a load-bearing assumption**, tested (not assumed)
   by Variant 3: did councils in high-appreciation areas actually set lower
   Band D rates as their implicit tax base grew, which would make the
-  redistribution smaller than Variants 1-2 imply on their own? See
-  `notebooks/02_method.ipynb` and the Variant 3 regression results for the
-  honest answer, including if it undermines the headline.
+  redistribution smaller than Variants 1-2 imply on their own? This is also
+  the strongest form of the objection IFS (2020) themselves raise: they
+  note the cross-LA unfairness could in principle be corrected entirely
+  through the funding settlement — redistributing grant in line with
+  current property values — without reforming council tax bands at all.
+  See `notebooks/02_method.ipynb` and the Variant 3 regression results for
+  the honest answer, including if it undermines the headline.
 - **Band-midpoint reconstruction is an approximation.** We do not observe
   1991 property values, only 1991 bands, several of which are open-ended
   (Band A below £40k, Band H above £320k with no upper bound). Midpoint

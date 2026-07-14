@@ -119,6 +119,22 @@ def fetch_mhclg_settlement_data() -> None:
     )
 
 
+def fetch_ifs_r169_validation_data() -> None:
+    """IFS R169 published LA-level revaluation results - Phase 4 known-answer validation, not a pipeline input."""
+    raise ManualDownloadRequired(
+        "IFS R169 LA-level revaluation-day results (Adam, Hodge, Phillips & Xu, 2020):\n"
+        "  https://www.ifs.org.uk/research/english-council-tax\n"
+        "  (returns 403 to automated fetch; open in a browser)\n"
+        "  Used only to validate Phase 4's counterfactual engine against a published,\n"
+        "  independently-produced result - see DATA.md 'Prior literature'.\n"
+        "  If the LA-level data table isn't downloadable from that page, the full report PDF\n"
+        "  is mirrored at:\n"
+        "  https://www.nuffieldfoundation.org/wp-content/uploads/2020/03/"
+        "R169-Revaluation-and-reform-bringing-council-tax-in-England-into-the-21st-century.pdf\n"
+        "  Save whatever is obtained to data/validation/ifs_r169/"
+    )
+
+
 FETCHERS = [
     fetch_uk_hpi,
     fetch_ons_lad_boundaries,
@@ -128,6 +144,7 @@ FETCHERS = [
     fetch_voa_ctsop,
     fetch_price_paid_calibration_slice,
     fetch_mhclg_settlement_data,
+    fetch_ifs_r169_validation_data,
 ]
 
 
