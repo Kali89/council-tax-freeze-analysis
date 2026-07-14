@@ -224,16 +224,63 @@ the assumption that the relative band mix within a county was similar
 across its predecessor districts and stable over 2000-2009. That is a real,
 named assumption, not a neutral default, and it is likely wrong in a
 predictable direction (e.g. Penwith, historically a lower-value part of
-Cornwall, almost certainly has a poorer band mix than Carrick) - the sign of
-that bias has not been checked.
+Cornwall, almost certainly has a poorer band mix than Carrick).
 
-**This is now flagged for an explicit decision before Phase 4 writes any
-weighting logic** — options include: (a) impute band shares as above and
-treat 2000-08 for the seven 2009-wave areas as a documented, lower-confidence
-segment; (b) use Table 125's unbanded totals for a coarser, band-agnostic
-weighting scheme for just those nine years; (c) exclude the 2009-wave areas'
-pre-2009 contribution from the headline series entirely and report them
-separately; (d) something else. Not decided here.
+**Decision (resolved, not deferred): headline series 2009-10 to 2025-26,
+zero imputation; a separately-labelled backward extension to 2000-01.**
+The deciding fact was not the 6.3% area share on its own but County
+Durham's ~16% intra-county rate spread: a blended dwelling count there
+would materially move a North East authority's liability, and Durham/
+Northumberland sit directly on the North/South treatment variable this
+analysis measures — error there does not average out against the South, it
+lands on the comparison.
+
+- `config.HEADLINE_FIRST_YEAR = "2009-10"` through `LAST_YEAR`: every LA on
+  observed CTSOP band counts. This is the load-bearing claim, and it is
+  clean — 17 years is still comfortably the longest cumulative estimate of
+  this mechanism anyone has published (see "Prior literature" above; both
+  IFS 2020 and Centre for Cities are snapshots, not time series at all).
+- `config.EXTENSION_FIRST_YEAR = "2000-01"` through the year before
+  `HEADLINE_FIRST_YEAR`: Table 125 predecessor dwelling-count weights +
+  imputed band shares (`config.BAND_SHARE_IMPUTATION_METHOD_GRID`),
+  reported ONLY as an explicitly labelled addition — "extending backward on
+  imputed band shares adds a further £X per dwelling" — never silently
+  folded into the headline figure.
+- **Bias direction stated plainly, same framing as the Band A/H midpoint
+  choice** (`config.BAND_SHARE_IMPUTATION_IS_CONSERVATIVE`): assigning
+  Easington or Penwith their county's post-2009 average band mix gives them
+  a BETTER mix than they likely really had (poorer areas pull the true
+  county average down). A better band mix means a higher imputed 1991-basis
+  stock value, which means a higher counterfactual liability, which means a
+  SMALLER measured gap. The imputation therefore understates the finding it
+  contributes to — the backward extension is a floor on 2000-09, not a
+  central estimate. 02_method.ipynb states this using the same "conservative
+  corner" language as the midpoint sensitivity, not a separate framing.
+- **Sensitivity on the imputation, not just a single imputed number**:
+  `BAND_SHARE_IMPUTATION_METHOD_GRID` varies the back-projected shares
+  across county-average (base case), successor's-earliest-observed
+  (distinguishes multi-successor counties, Bedfordshire and Cheshire, from
+  the base case), and a deliberately pessimistic skew for low-value
+  predecessors. Reported in 02_method.ipynb/03_results.ipynb regardless of
+  outcome — if the extension barely moves across methods, that is itself a
+  reported finding and strengthens it; if it moves a lot, that is reported
+  too.
+- **Option "coarsen the weighting scheme everywhere" was considered and
+  dropped**: it would worsen resolution across all 26 years to avoid one
+  imputation confined to 9, and introduces a pre/post-2009 methodological
+  inconsistency in exchange - two problems for the price of one.
+
+The structural point of this split: a hostile reader can reject the
+2000-09 extension outright and the headline survives completely untouched —
+it just gets shorter. Contestable material (the imputation) sits outside
+the load-bearing claim, which is where contestable material belongs.
+
+**Corroboration, noted for the record**: Table 125's Old/New ONS code
+columns independently cross-validate the Phase 1 boundary crosswalk's GSS
+codes (e.g. Penwith: old `15UF`, new `E07000023`, matching the ONS Code
+History Database resolution exactly) - unplanned, from a completely
+separate MHCLG series never used for that purpose. Free evidence the
+boundary harmonisation work is right, not just internally self-consistent.
 
 **UK HPI (#3).** LA-level series start January 1995, not April 1991 — see
 the README's Framing section. A handful of LAs have suppressed or

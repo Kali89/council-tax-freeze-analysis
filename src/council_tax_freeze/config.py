@@ -23,10 +23,53 @@ OUTPUTS_DIR = ROOT / "outputs"
 
 # ---------------------------------------------------------------------------
 # Study period
+#
+# Split into a HEADLINE series and a BACKWARD EXTENSION, not one uniform
+# 2000-01 to 2025-26 run - see DATA.md "2009-wave dwelling-count gap" for
+# the full reasoning. In short: the seven 2009 reorg-wave counties (Cornwall,
+# Durham, Northumberland, Shropshire, Wiltshire, Bedfordshire, Cheshire)
+# held ~6.3% of England's dwelling stock pre-2009, and Band D rates within
+# at least one of them (County Durham) vary by ~16% across predecessor
+# districts - meaning the counterfactual engine's weighting choice would
+# materially move Durham's liability, and Durham/Northumberland sit
+# directly on the North/South treatment variable this whole analysis
+# measures. No real predecessor-level BAND distribution exists for those
+# years (checked, not assumed - see DATA.md); only unbanded total dwelling
+# weights (MHCLG Live Table 125) plus an imputed band split. That
+# imputation is a real, directionally-biased assumption, not a neutral
+# default, so it does not belong inside the headline number.
+#
+# HEADLINE_FIRST_YEAR to LAST_YEAR: every LA on observed CTSOP band counts,
+# zero imputation. This is the load-bearing claim.
+# EXTENSION_FIRST_YEAR to HEADLINE_FIRST_YEAR (exclusive): reported
+# separately as "extending backward on imputed band shares adds a further
+# £X per dwelling" - never folded into the headline. The imputation
+# understates the gap (see BAND_SHARE_IMPUTATION_IS_CONSERVATIVE below), so
+# this is a floor on the pre-2009 period, not a central estimate.
 # ---------------------------------------------------------------------------
-FIRST_YEAR = "2000-01"
+EXTENSION_FIRST_YEAR = "2000-01"
+HEADLINE_FIRST_YEAR = "2009-10"
 LAST_YEAR = "2025-26"
+FIRST_YEAR = EXTENSION_FIRST_YEAR  # full study window, extension + headline combined
 TARGET_BOUNDARY_VINTAGE = "2025"  # harmonise everything to 2025 LAD geography
+
+# Imputed band shares for the 2000-01..2008-09 backward extension, applied
+# to each 2009-wave predecessor district's Table 125 total dwelling count.
+# Base case: each county's earliest observed post-2009 CTSOP band-share
+# percentages, applied uniformly to all of that county's predecessors -
+# assumes a stable, county-uniform band mix, which is very likely wrong in
+# a predictable direction (e.g. Penwith's true mix was almost certainly
+# poorer than Cornwall's post-2009 average). Because a poorer band mix
+# would mean LOWER imputed stock value and therefore a SMALLER measured
+# gap, this bias runs the same direction as the Band A/H midpoint choice:
+# conservative, understating rather than overstating the finding. Stated
+# plainly in 02_method.ipynb, not left implicit.
+BAND_SHARE_IMPUTATION_IS_CONSERVATIVE = True
+BAND_SHARE_IMPUTATION_METHOD_GRID = [
+    "county_average_earliest_observed",  # base case, described above
+    "successor_earliest_observed",  # equivalent for single-successor counties; distinguishes multi-successor ones (Bedfordshire, Cheshire)
+    "pessimistic_for_low_value_districts",  # deliberately skews poorer predecessors' imputed mix further down, to bound how much the base case could be understating the extension
+]
 
 # ---------------------------------------------------------------------------
 # Council tax bands (England: A-H). Multiplier is fraction of Band D.
