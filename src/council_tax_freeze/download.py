@@ -44,10 +44,21 @@ def _download(url: str, dest: Path, chunk_size: int = 1 << 16) -> None:
 
 
 def fetch_uk_hpi() -> None:
-    """UK House Price Index, full file. URL below is best-effort, not yet verified against a live response - Phase 3 will confirm or replace it."""
-    url = "https://landregistry.data.gov.uk/app/ukhpi/download/data/UK-HPI-full-file.csv"
-    dest = DATA_DIR / "hpi" / "UK-HPI-full-file.csv"
-    _download(url, dest)
+    """UK House Price Index, full file. The Phase 0 URL guess was wrong (404) - confirmed and fixed in Phase 3. The real file lives on publicdata.landregistry.gov.uk with the release month in the filename, so this discovers the current month's page via the UK HPI reports COLLECTION page (which links to it directly) rather than hardcoding a URL that goes stale every month, or relying on gov.uk free-text search, which turned out to rank the actual page too low to find reliably."""
+    import re
+
+    collection = requests.get(
+        "https://www.gov.uk/api/content/government/collections/uk-house-price-index-reports", timeout=30
+    ).json()
+    page_paths = sorted(
+        set(re.findall(r"/government/statistical-data-sets/uk-house-price-index-data-downloads-[a-z0-9-]+", str(collection))),
+        reverse=True,  # sorts most recent month first, given the -month-year suffix
+    )
+    content = requests.get(f"https://www.gov.uk/api/content{page_paths[0]}", timeout=30).json()
+    body = content["details"]["body"]
+    csv_url = next(m for m in re.findall(r'href="([^"]+UK-HPI-full-file-[^"]+\.csv)[^"]*"', body))
+    dest = DATA_DIR / "hpi" / csv_url.rsplit("/", 1)[-1]
+    _download(csv_url, dest)
 
 
 def fetch_ons_lad_boundaries() -> None:
