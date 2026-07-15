@@ -132,3 +132,69 @@ def test_north_east_has_no_single_pot_flagged_las(engine_and_ctsop):
     la_cum = compute_la_cumulative_gap(eng.la_year, ct.la_year, "variant1")
     north_east_codes = set(la_cum[la_cum["region"] == "North East"]["ons_code"])
     assert north_east_codes.isdisjoint(SINGLE_POT_FLAGGED_LAS)
+
+
+# ---------------------------------------------------------------------------
+# Headline-figure pins. "Per dwelling" is ambiguous unless every number also
+# says WHOSE rate and over what base - Hartlepool-at-its-own-rate and
+# Hartlepool-at-the-region-average-rate are both real, both legitimate, and
+# differ by 31%; an LA's own cumulative-per-dwelling and a region's
+# cumulative-per-dwelling are two more, different again. Each assertion
+# message below states the exact definition of the number it pins, so a
+# future edit that quietly reuses one number's wording for a different
+# quantity (or vice versa) fails a test, not just a copy-edit review.
+# ---------------------------------------------------------------------------
+
+
+@requires_all_data
+def test_headline_figures_are_pinned_with_their_exact_definitions(engine_and_ctsop):
+    eng, ct = engine_and_ctsop
+    la_cum = compute_la_cumulative_gap(eng.la_year, ct.la_year, "variant1")
+    region_cum = compute_region_cumulative_gap(la_cum)
+
+    hartlepool = la_cum.set_index("ons_code").loc["E06000001"]
+    north_east = region_cum.set_index("region").loc["North East"]
+
+    hartlepool_2025_dwellings = ct.la_year[
+        (ct.la_year.ons_code == "E06000001") & (ct.la_year.financial_year == "2025-26")
+    ]["all_properties"].iloc[0]
+    hartlepool_cumulative_per_current_dwelling = hartlepool["cumulative_gap_gbp"] / hartlepool_2025_dwellings
+
+    ne_2025_dwellings = (
+        ct.la_year[ct.la_year.financial_year == "2025-26"]
+        .merge(la_cum[["ons_code", "region"]], on="ons_code")
+        .query("region == 'North East'")["all_properties"]
+        .sum()
+    )
+    ne_cumulative_per_current_dwelling = north_east["cumulative_gap_gbp"] / ne_2025_dwellings
+
+    assert hartlepool["per_dwelling_per_year_gbp"] == pytest.approx(365.52, abs=0.5), (
+        "Hartlepool's OWN dwelling-year-weighted rate (its own annual gaps / its own dwelling-years) "
+        "should be ~£365.52/dwelling/year - NOT the North East region average (£227.63) and NOT any "
+        "cumulative figure. If this fails, check whether the wrong column or the wrong scope (LA vs "
+        "region) is being read."
+    )
+    assert north_east["per_dwelling_per_year_gbp"] == pytest.approx(227.63, abs=0.5), (
+        "The North East REGION AVERAGE rate (all 12 North East LAs' annual gaps / their combined "
+        "dwelling-years) should be ~£227.63/dwelling/year - NOT Hartlepool's own rate (£365.52), which "
+        "is higher because Hartlepool is the region's highest-rate LA despite being only 3.6% of its "
+        "dwelling stock."
+    )
+    assert hartlepool_cumulative_per_current_dwelling == pytest.approx(5863, abs=50), (
+        "Hartlepool's cumulative total GBP gap (2009-10 to 2025-26) divided by HARTLEPOOL'S OWN "
+        "2025-26 dwelling count should be ~£5,863 - this is a CUMULATIVE-PER-CURRENT-DWELLING figure, "
+        "not a rate, and not the region's equivalent figure (£3,677). Must never be computed as "
+        "rate x number-of-years (that method is deliberately not used anywhere in this pipeline - see "
+        "aggregates.py module docstring)."
+    )
+    assert ne_cumulative_per_current_dwelling == pytest.approx(3677, abs=50), (
+        "The North East region's cumulative total GBP gap (2009-10 to 2025-26) divided by the REGION'S "
+        "OWN combined 2025-26 dwelling count should be ~£3,677 - this is the region-level "
+        "cumulative-per-current-dwelling figure, not Hartlepool's equivalent (£5,863), and not "
+        "region-average-rate x 17 (~£3,870, a different, deliberately-unused method - see above)."
+    )
+    assert north_east["cumulative_gap_gbp_bn"] == pytest.approx(4.7, abs=0.05), (
+        "The North East region's cumulative TOTAL gap (2009-10 to 2025-26, summed across all 12 LAs "
+        "and 17 years) should be ~£4.7bn - a plain total, not divided by any dwelling count at all, "
+        "and not the same number as either per-dwelling figure above."
+    )

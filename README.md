@@ -13,20 +13,23 @@ would that authority have paid, per dwelling, per year, than a
 value-proportional benchmark?**
 
 **The North East has overpaid a central estimate of £227.63 per dwelling
-per year** (empirically-anchored range ~£206-232 — a central estimate, not
-a floor, see Framing below) against a value-proportional benchmark — around
-£3,870 cumulatively per dwelling since 2009-10, region-wide. **Hartlepool
-specifically — the highest-rate LA in the region, though only 3.6% of its
-dwelling stock — has overpaid £365.52 per dwelling per year, around £5,900
-cumulatively per dwelling currently in Hartlepool.** Two different, both
-real numbers: a region average and one LA's own figure, not the same
-quantity rounded differently — see `notebooks/03_results.ipynb` "The
-headline" for both, computed side by side. London is the arithmetic mirror
-image of the same closed, revenue-neutral system, not a separate finding
-about London — see `notebooks/03_results.ipynb` for the full results,
-including LA-total and region-total aggregates, and read **Framing** and
-"What this does not show" (in the results notebook) before citing any
-number from this repo.
+per year** — the region average across its 12 LAs, dwelling-year-weighted
+(empirically-anchored range ~£206-232 — a central estimate, not a floor,
+see Framing below) — **£3,677 cumulatively per CURRENT North East dwelling**
+(region total ÷ the region's 2025-26 dwelling stock). **Hartlepool
+specifically — its own figure, not the region average, and the highest of
+the region's 12 LAs despite being only 3.6% of its dwelling stock — has
+overpaid £365.52 per dwelling per year, £5,863 cumulatively per current
+dwelling in Hartlepool.** Two different, both real numbers throughout this
+repo: a region average and one LA's own figure are never the same quantity
+at different precision, and every figure states explicitly which one it is
+— see `notebooks/03_results.ipynb` "The headline" for both, computed side
+by side and pinned with their exact definitions in
+`tests/test_aggregates.py`. London is the arithmetic mirror image of the
+same closed, revenue-neutral system, not a separate finding about London —
+see `notebooks/03_results.ipynb` for the full results, including LA-total
+and region-total aggregates, and read **Framing** and "What this does not
+show" (in the results notebook) before citing any number from this repo.
 
 The output is a *redistributive gap* — the divergence between what an
 authority actually paid and what a value-proportional benchmark would have

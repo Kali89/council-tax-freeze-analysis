@@ -804,6 +804,34 @@ per-dwelling figures for both — fixed with the same substitution already
 used twice elsewhere in this pipeline for the same reason, pinned with a
 regression test.
 
+**"Per dwelling" is ambiguous unless every figure states whose rate and
+over what base — found on review, not before publishing.** An early draft
+of the README stated "Hartlepool has overpaid roughly £5,900 per dwelling
+since 2009-10" next to the North East's £227.63/dwelling/year region
+figure, reading as if they were the same quantity at different precision.
+They are not: £227.63 is the North East's region-average rate across its
+12 LAs, dwelling-year-weighted; Hartlepool's own rate is £365.52/dwelling/
+year — the highest of the 12, despite carrying only 3.6% of the region's
+dwelling stock, pulled down in the weighted average by larger, lower-rate
+LAs (Newcastle £162/year, Sunderland £55/year). A THIRD figure briefly
+appeared too: "region-average rate × 17 years" (≈£3,870), which is close
+to but not equal to the correct "region cumulative total ÷ current
+dwelling stock" figure (£3,677) — dropped entirely, not just labelled,
+since it added a fourth confusable number for no benefit the other two
+didn't already cover (see `aggregates.py`'s naive-vs-correct distinction,
+above, which is the same underlying principle). Fixed throughout
+(README, both notebooks, this file) by always stating explicitly which of
+three DIFFERENT quantities a number is — a RATE (£/dwelling/year, region
+average or one LA's own), a cumulative TOTAL (£, not per-dwelling at
+all), or a cumulative total ÷ CURRENT dwelling stock (always said as
+"per CURRENT dwelling") — and pinning the exact values of all four
+headline figures (Hartlepool's own rate, the North East region-average
+rate, and both cumulative-per-current-dwelling figures) with their full
+definitions written into the assertion messages themselves in
+`tests/test_aggregates.py::test_headline_figures_are_pinned_with_their_exact_definitions`,
+so a future copy-edit that reuses one figure's wording for a different
+quantity fails a test, not just a proofread.
+
 **Region totals, 2009-10 to 2025-26 (Variant 1): North East +£4.7bn.**
 **London: −£24.0bn across all 33 boroughs, of which −£15.8bn excludes the
 five single-pot-exposed boroughs (Westminster, Wandsworth, Hammersmith and
