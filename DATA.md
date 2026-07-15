@@ -804,16 +804,18 @@ per-dwelling figures for both — fixed with the same substitution already
 used twice elsewhere in this pipeline for the same reason, pinned with a
 regression test.
 
-**Region totals**: North East +£4.7bn, London −£24.0bn, 2009-10 to
-2025-26 (Variant 1). **London's aggregate is reported with its
-upper-bound status on the number itself**: 34.2% of the −£24.0bn comes
-from the five single-pot-flagged LAs (Westminster, Wandsworth, Hammersmith
-and Fulham, City of London, Kensington and Chelsea) — excluding them,
-London's total is −£15.8bn, not subject to that caveat. The North East
-total carries no equivalent caveat (none of the five flagged LAs are
-Northern; shared-tier exposure there is 14-16%; Variant 3 found no
-rate-setting compensation effect to worry about for non-London LAs
-either) — an asymmetry stated explicitly, not left for a reader to infer.
+**Region totals, 2009-10 to 2025-26 (Variant 1): North East +£4.7bn.**
+**London: −£24.0bn across all 33 boroughs, of which −£15.8bn excludes the
+five single-pot-exposed boroughs (Westminster, Wandsworth, Hammersmith and
+Fulham, City of London, Kensington and Chelsea) — the second figure, not
+the first, is the one to lead with**, since 34.2% of the headline −£24.0bn
+sits in cells already flagged as inflated upper bounds, and a reader
+should not have to do that subtraction themselves to find the load-bearing
+number. The North East total carries no equivalent caveat (none of the
+five flagged LAs are Northern; shared-tier exposure there is 14-16%;
+Variant 3 found no rate-setting compensation effect to worry about for
+non-London LAs either) — an asymmetry stated explicitly, not left for a
+reader to infer.
 
 **Framing, because a £-billions figure walks directly onto the turf of
 the regional net-fiscal-transfer literature.** The claim is that

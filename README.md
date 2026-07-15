@@ -12,15 +12,21 @@ tax bands had been periodically revalued since 2009, how much more or less
 would that authority have paid, per dwelling, per year, than a
 value-proportional benchmark?**
 
-**Hartlepool has overpaid roughly £5,900 per dwelling since 2009-10.** The
-North East as a region has overpaid a central estimate of £227.63 per
-dwelling per year (empirically-anchored range ~£206-232 — a central
-estimate, not a floor, see Framing below), against a value-proportional
-benchmark. London is the arithmetic mirror image of the same closed,
-revenue-neutral system, not a separate finding about London — see
-`notebooks/03_results.ipynb` for the full results, including LA-total and
-region-total aggregates, and read **Framing** and "What this does not
-show" (in the results notebook) before citing any number from this repo.
+**The North East has overpaid a central estimate of £227.63 per dwelling
+per year** (empirically-anchored range ~£206-232 — a central estimate, not
+a floor, see Framing below) against a value-proportional benchmark — around
+£3,870 cumulatively per dwelling since 2009-10, region-wide. **Hartlepool
+specifically — the highest-rate LA in the region, though only 3.6% of its
+dwelling stock — has overpaid £365.52 per dwelling per year, around £5,900
+cumulatively per dwelling currently in Hartlepool.** Two different, both
+real numbers: a region average and one LA's own figure, not the same
+quantity rounded differently — see `notebooks/03_results.ipynb` "The
+headline" for both, computed side by side. London is the arithmetic mirror
+image of the same closed, revenue-neutral system, not a separate finding
+about London — see `notebooks/03_results.ipynb` for the full results,
+including LA-total and region-total aggregates, and read **Framing** and
+"What this does not show" (in the results notebook) before citing any
+number from this repo.
 
 The output is a *redistributive gap* — the divergence between what an
 authority actually paid and what a value-proportional benchmark would have
@@ -74,8 +80,12 @@ headline period (2009-10 to 2025-26), this amounts to a central estimate of
 range ~£206-232) and **-£394.92 per dwelling per year in London** — the
 latter driven in part by a known, quantified upper-bound bias in five
 inner-London LAs (see below and DATA.md "Phase 4"). Aggregated across the
-whole period: **+£4.7bn (North East) and -£24.0bn (London, of which 34%
-comes from the five flagged LAs)** — see `notebooks/03_results.ipynb`
+whole period: **+£4.7bn (North East)**. London's aggregate is **-£24.0bn
+across all 33 boroughs, of which -£15.8bn excludes the five single-pot-
+exposed boroughs (Westminster, Wandsworth, Hammersmith and Fulham, City of
+London, Kensington and Chelsea) — the second figure, not the first, is the
+robust one**, since roughly a third of the headline -£24.0bn sits in cells
+already flagged as inflated upper bounds. See `notebooks/03_results.ipynb`
 "Aggregates" for why this is reported as a missing entry in the regional
 net-transfer ledger, not a competing claim about London's fiscal position.
 
@@ -146,6 +156,21 @@ stated up front. In brief: three counterfactual variants, isolating (1) the
 effect of the frozen 1991 valuation date, (2) the added effect of compressed
 band multipliers, and (3) whether rate-setting behaviour already offsets
 (1)-(2).
+
+## Methodology notes
+
+**The presentation layer had no test coverage, and was the highest-risk
+component in the project precisely because it's the only part most readers
+will ever see.** Six phases of data-quality investigation, boundary
+harmonisation, a validated counterfactual engine, and 96 passing tests
+still produced a first-draft choropleth with the colour scale backwards —
+red and blue swapped, so the map told the exact opposite story to the text
+next to it. Caught by rendering the image and looking at it, not by
+anything in the suite: the same instinct (a number, or here a colour,
+looking slightly off) that found every real bug in this project, applied
+one layer further out than a test can reach. See DATA.md "Phase 7" for
+the full account, and the choropleth-generation cells in
+`notebooks/03_results.ipynb` for what actually shipped.
 
 ## Repository structure
 
